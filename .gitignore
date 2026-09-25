@@ -24,3 +24,8 @@ mlruns/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/*.tsbuildinfo

@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 220 20% 97%;
+  --foreground: 222 30% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 30% 12%;
+  --muted: 220 16% 94%;
+  --muted-foreground: 220 9% 44%;
+  --border: 220 14% 89%;
+  --primary: 212 80% 42%;
+  --primary-foreground: 0 0% 100%;
+  --sidebar: 222 38% 14%;
+  --sidebar-foreground: 220 20% 88%;
+  --risk-critique: 0 72% 50%;
+  --risk-eleve: 24 90% 50%;
+  --risk-moyen: 42 92% 46%;
+  --risk-faible: 152 55% 38%;
+}
+
+body { @apply bg-background text-foreground antialiased; }
+.tabular { font-variant-numeric: tabular-nums; }

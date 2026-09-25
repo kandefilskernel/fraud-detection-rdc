@@ -54,11 +54,15 @@ def list_transactions(
     db: Session = Depends(get_db), _=Depends(get_current_user),
     channel: str | None = None, action: str | None = None, risk_level: str | None = None,
     operator: str | None = None, user_id: str | None = None, min_probability: float | None = None,
-    labeled: bool | None = None,
+    labeled: bool | None = None, alerts_only: bool = False, search: str | None = None,
     page: int = Query(1, ge=1), size: int = Query(50, ge=1, le=500),
 ):
     q = select(ScoredTransaction)
     filters = []
+    if alerts_only:
+        filters.append(ScoredTransaction.action != "APPROVE")
+    if search:
+        filters.append((ScoredTransaction.transaction_id == search) | (ScoredTransaction.user_id == search))
     if channel:
         filters.append(ScoredTransaction.channel == channel)
     if action:
