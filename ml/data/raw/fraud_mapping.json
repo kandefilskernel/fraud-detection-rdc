@@ -1,0 +1,8 @@
+{
+  "SIM_SWAP": "Changement SIM suspecte",
+  "ZONING_JUMP": "Transactions multizone rapides",
+  "ACCOUNT_TAKEOVER": "Compromission compte",
+  "CNP_FRAUD": "Fraude sans contact (CNP)",
+  "VELOCITY_ABUSE": "Abus fréquence/montant",
+  "MONEY_LAUNDERING": "Blanchiment soupçonné"
+}

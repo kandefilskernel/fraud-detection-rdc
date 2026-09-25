@@ -1,0 +1,76 @@
+# Infrastructure locale : PostgreSQL (+ TimescaleDB), Redis, Redpanda (compatible Kafka).
+# Lancement : docker compose up -d        Arrêt : docker compose down
+services:
+  postgres:
+    image: timescale/timescaledb:2.14.2-pg16
+    container_name: nuru_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nuru_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nuru_secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-fraud_detection_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nuru_admin} -d ${POSTGRES_DB:-fraud_detection_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: nuru_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]   # persistance des profils comportementaux
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Redpanda : broker compatible API Kafka, un seul conteneur, sans Zookeeper.
+  # Depuis les conteneurs : redpanda:9092   —   depuis Windows : localhost:19092
+  redpanda:
+    image: redpandadata/redpanda:v24.1.7
+    container_name: nuru_redpanda
+    restart: unless-stopped
+    command:
+      - redpanda start
+      - --mode dev-container
+      - --smp 1
+      - --memory 512M
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # Interface web pour voir les topics et messages : http://localhost:8088
+  redpanda-console:
+    image: redpandadata/console:v2.6.0
+    container_name: nuru_redpanda_console
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8088:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:

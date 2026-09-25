@@ -1,0 +1,74 @@
+{
+    "split_bounds": {
+        "start": "2025-06-01 00:00:13",
+        "early_stop_from": "2025-09-16 02:17:59.935000",
+        "val_from": "2025-10-04 23:52:54.100000",
+        "test_from": "2025-10-31 23:51:20.050000",
+        "end": "2025-11-27 23:49:46"
+    },
+    "seq_len": 10,
+    "clip": 10.0,
+    "n_features": 58,
+    "splits": {
+        "train": {
+            "n": 200872,
+            "n_fraud": 2651,
+            "fraud_rate": 0.0132,
+            "by_channel": {
+                "MOBILE_MONEY": {
+                    "n": 185261,
+                    "n_fraud": 2188
+                },
+                "VISA_VIRTUAL": {
+                    "n": 15611,
+                    "n_fraud": 463
+                }
+            }
+        },
+        "early_stop": {
+            "n": 37851,
+            "n_fraud": 510,
+            "fraud_rate": 0.01347,
+            "by_channel": {
+                "MOBILE_MONEY": {
+                    "n": 35078,
+                    "n_fraud": 424
+                },
+                "VISA_VIRTUAL": {
+                    "n": 2773,
+                    "n_fraud": 86
+                }
+            }
+        },
+        "val": {
+            "n": 50753,
+            "n_fraud": 871,
+            "fraud_rate": 0.01716,
+            "by_channel": {
+                "MOBILE_MONEY": {
+                    "n": 46670,
+                    "n_fraud": 717
+                },
+                "VISA_VIRTUAL": {
+                    "n": 4083,
+                    "n_fraud": 154
+                }
+            }
+        },
+        "test": {
+            "n": 50309,
+            "n_fraud": 767,
+            "fraud_rate": 0.01525,
+            "by_channel": {
+                "MOBILE_MONEY": {
+                    "n": 46226,
+                    "n_fraud": 618
+                },
+                "VISA_VIRTUAL": {
+                    "n": 4083,
+                    "n_fraud": 149
+                }
+            }
+        }
+    }
+}

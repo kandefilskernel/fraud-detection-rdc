@@ -1,0 +1,6 @@
+TOPIC_RAW_TRANSACTIONS = "raw.transactions"
+TOPIC_UNIFIED_TRANSACTIONS = "unified.transactions"
+TOPIC_FEATURE_EVENTS = "feature.events"
+TOPIC_FRAUD_ALERTS = "fraud.alerts"
+TOPIC_AUDIT_LOGS = "audit.logs"
+TOPIC_NOTIFICATIONS = "notifications.events"

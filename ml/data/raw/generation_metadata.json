@@ -1,0 +1,111 @@
+{
+  "config": {
+    "n_users": 3000,
+    "n_days": 180,
+    "start_date": "2025-06-01",
+    "seed": 42,
+    "usd_cdf_rate": 2850.0,
+    "mm_fraud_rate": 0.012,
+    "card_fraud_rate": 0.025,
+    "mule_account_rate": 0.01,
+    "legit_device_change_rate": 0.04,
+    "visa_adoption_multiplier": 2.5,
+    "n_agents": 800,
+    "n_mm_merchants": 600,
+    "n_card_merchants": 300,
+    "output_dir": "ml/data/raw"
+  },
+  "summary": {
+    "n_transactions": 339785,
+    "period": [
+      "2025-06-01 00:00:13",
+      "2025-11-27 23:49:46"
+    ],
+    "fraud_rate_global": 0.01412,
+    "by_channel": {
+      "MOBILE_MONEY": {
+        "n": 313235,
+        "fraud_rate": 0.0126
+      },
+      "VISA_VIRTUAL": {
+        "n": 26550,
+        "fraud_rate": 0.03209
+      }
+    },
+    "fraud_transactions_by_type": {
+      "SIM_SWAP": 1186,
+      "SOCIAL_ENGINEERING": 986,
+      "SMURFING": 709,
+      "ACCOUNT_TAKEOVER": 592,
+      "AGENT_FRAUD": 474,
+      "CNP_FRAUD": 341,
+      "CARD_TESTING": 298,
+      "TOPUP_DRAIN": 213
+    },
+    "fraud_episodes_by_type": {
+      "ACCOUNT_TAKEOVER": 198,
+      "AGENT_FRAUD": 307,
+      "CARD_TESTING": 35,
+      "CNP_FRAUD": 177,
+      "SIM_SWAP": 339,
+      "SMURFING": 70,
+      "SOCIAL_ENGINEERING": 520,
+      "TOPUP_DRAIN": 71
+    },
+    "failure_rate_legit": 0.01688,
+    "failure_rate_fraud": 0.11607,
+    "tx_type_distribution": {
+      "P2P_RECEIVE": 74740,
+      "P2P_SEND": 68597,
+      "CASH_IN": 51992,
+      "CASH_OUT": 46821,
+      "AIRTIME": 27774,
+      "MERCHANT_PAYMENT": 27153,
+      "BILL_PAYMENT": 16158,
+      "CARD_PURCHASE": 15151,
+      "CARD_TOPUP": 11399
+    }
+  },
+  "data_dictionary": {
+    "transaction_id": "Identifiant unique de la transaction",
+    "timestamp": "Date et heure (heure locale RDC)",
+    "user_id": "Titulaire du compte (portefeuille et carte)",
+    "wallet_id": "Numéro de portefeuille Mobile Money (format MSISDN fictif)",
+    "card_id": "Identifiant de la carte Visa virtuelle (canal VISA_VIRTUAL uniquement)",
+    "channel": "MOBILE_MONEY ou VISA_VIRTUAL",
+    "operator": "Opérateur du portefeuille : VODACOM, AIRTEL, ORANGE",
+    "tx_type": "P2P_SEND, P2P_RECEIVE, CASH_IN, CASH_OUT, MERCHANT_PAYMENT, AIRTIME, BILL_PAYMENT, CARD_TOPUP (portefeuille -> carte), CARD_PURCHASE",
+    "access_channel": "USSD, APP, AGENT",
+    "amount": "Montant dans la devise de la transaction",
+    "currency": "CDF ou USD",
+    "amount_usd": "Montant converti en USD",
+    "balance_before_usd": "Solde du compte débité/crédité avant la transaction (USD)",
+    "balance_after_usd": "Solde après la transaction (inchangé si échec)",
+    "status": "SUCCESS ou FAILED_INSUFFICIENT_FUNDS",
+    "counterparty_id": "Portefeuille contrepartie (P2P) ou opérateur (AIRTIME)",
+    "merchant_id": "Marchand (paiements et achats carte)",
+    "merchant_category": "Catégorie du marchand",
+    "merchant_country": "Pays du marchand (ISO-2)",
+    "agent_id": "Agent Mobile Money (CASH_IN / CASH_OUT)",
+    "device_id": "Empreinte de l'appareil utilisé",
+    "device_type": "smartphone ou feature_phone",
+    "ip_country": "Pays de l'adresse IP (accès APP uniquement)",
+    "location_province": "Province d'où la transaction est initiée",
+    "is_fraud": "CIBLE : 1 si la transaction fait partie d'un épisode de fraude (tentatives échouées incluses)",
+    "fraud_type": "Typologie de fraude (analyse uniquement, jamais en entrée du modèle)",
+    "fraud_episode_id": "Regroupe les transactions d'un même épisode (analyse uniquement)"
+  },
+  "hidden_labels": {
+    "transactions.csv": [
+      "is_fraud (cible)",
+      "fraud_type",
+      "fraud_episode_id"
+    ],
+    "users.csv": [
+      "is_mule_account"
+    ],
+    "agents.csv": [
+      "is_compromised"
+    ]
+  }
+}
