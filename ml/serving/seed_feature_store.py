@@ -74,7 +74,13 @@ def main():
     p.add_argument("--until", default="test",
                    help="'test' (début de la période de test), 'all', ou une date AAAA-MM-JJ")
     p.add_argument("--redis-url", default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    p.add_argument("--if-empty", action="store_true", help="ne rien faire si Redis est déjà amorcé")
     a = p.parse_args()
+
+    r = redis.Redis.from_url(a.redis_url)
+    if a.if_empty and r.exists(f"{PREFIX}:meta"):
+        print("[OK] feature store déjà amorcé :", r.get(f"{PREFIX}:meta").decode())
+        return
 
     until = None
     if a.until == "test":
@@ -88,7 +94,6 @@ def main():
     ext, sequences, period_start, n = replay(until)
     print(f"    {n:,} transactions rejouées en {time.perf_counter() - t0:.0f} s")
 
-    r = redis.Redis.from_url(a.redis_url)
     old = list(r.scan_iter(f"{PREFIX}:*", count=5000))
     for i in range(0, len(old), 5000):
         r.delete(*old[i:i + 5000])

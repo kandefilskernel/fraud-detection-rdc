@@ -68,6 +68,9 @@ def user_state_from_json(raw: str | bytes) -> _UserState:
     )
 
 
+_RELEASE_LUA = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
+
+
 def _s(v) -> str:
     return v.decode() if isinstance(v, bytes) else v
 
@@ -91,8 +94,8 @@ class RedisFeatureStore:
         try:
             yield
         finally:
-            if _s(self.r.get(key)) == token:
-                self.r.delete(key)
+            # libère le verrou seulement s'il nous appartient encore (1 aller-retour, atomique)
+            self.r.eval(_RELEASE_LUA, 1, key, token)
 
     # ------------------------------------------------------------------ lecture / écriture
     def _load(self, tx: dict) -> tuple[BehavioralFeatureExtractor, list[np.ndarray], bool]:

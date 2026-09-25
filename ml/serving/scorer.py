@@ -88,14 +88,18 @@ class HybridScorer:
         return torch.from_numpy(seq), torch.from_numpy(mask), start
 
     # ------------------------------------------------------------------ scoring
-    def score(self, x: np.ndarray, history: list[np.ndarray], explain: bool = True,
+    def score(self, x: np.ndarray, history: list[np.ndarray], explain: bool | str = "auto",
               top_k: int = 6) -> ScoreResult:
+        """explain : True (toujours), False (jamais) ou "auto" : SHAP seulement à partir du
+        risque MOYEN (p ≥ seuil/5). Le calcul SHAP exact coûte ~7 ms ; les ~98 % de
+        transactions à risque faible n'en ont pas besoin en temps réel."""
         X1 = x.reshape(1, -1)
         degraded = []
         scores = {}
 
-        dm = xgb.DMatrix(X1, feature_names=None)
-        scores["xgboost"] = float(self._booster.predict(dm, output_margin=True, iteration_range=self._iter_range)[0])
+        # prédiction directe sans DMatrix (~0,5 ms au lieu de ~2 ms)
+        scores["xgboost"] = float(self._booster.inplace_predict(
+            X1, iteration_range=self._iter_range, predict_type="margin")[0])
 
         attention = []
         try:
@@ -122,8 +126,10 @@ class HybridScorer:
         prob = 1.0 / (1.0 + math.exp(-logit_meta))
 
         top = []
-        if explain:
-            shap = self._booster.predict(dm, pred_contribs=True, iteration_range=self._iter_range)[0][:-1]  # dernière col. = biais
+        if explain is True or (explain == "auto" and prob >= self.threshold / 5):
+            dm = xgb.DMatrix(X1)
+            shap = self._booster.predict(dm, pred_contribs=True,
+                                         iteration_range=self._iter_range)[0][:-1]  # dernière col. = biais
             order = np.argsort(-np.abs(shap))[:top_k]
             raw_vals = x.astype(np.float64) * self._scale + self._mean
             top = [{"feature": self.feature_names[i], "shap": round(float(shap[i]), 4),

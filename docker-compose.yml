@@ -70,6 +70,122 @@ services:
       redpanda:
         condition: service_healthy
 
+  # ------------------------------------------------------------------ services applicatifs
+  # Amorçage du feature store (une seule fois : ne fait rien si Redis est déjà rempli)
+  feature-store-seeder:
+    image: fraud-rdc/scoring-service:dev
+    build:
+      context: .
+      dockerfile: services/scoring-service/Dockerfile
+    container_name: nuru_seeder
+    command: ["python", "-m", "ml.serving.seed_feature_store", "--if-empty"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./ml/data:/srv/ml/data:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  scoring-service:
+    image: fraud-rdc/scoring-service:dev
+    container_name: nuru_scoring
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SCORING_API_KEYS: ${SCORING_API_KEYS:-dev-scoring-key}
+    ports:
+      - "8001:8001"
+    depends_on:
+      feature-store-seeder:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+
+  integration-layer:
+    image: fraud-rdc/integration-layer:dev
+    build:
+      context: .
+      dockerfile: services/integration-layer/Dockerfile
+    container_name: nuru_integration
+    restart: unless-stopped
+    environment:
+      SCORING_URL: http://scoring-service:8001
+      SCORING_API_KEY: ${SCORING_API_KEY:-dev-scoring-key}
+      OPERATOR_API_KEYS: ${OPERATOR_API_KEYS:-vodacom:dev-vodacom-key,airtel:dev-airtel-key,orange:dev-orange-key,visa:dev-visa-key}
+    ports:
+      - "8002:8002"
+    depends_on:
+      scoring-service:
+        condition: service_healthy
+
+  backoffice-api:
+    image: fraud-rdc/backoffice-api:dev
+    build:
+      context: .
+      dockerfile: services/backoffice-api/Dockerfile
+    container_name: nuru_backoffice
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      CORS_ORIGINS: http://localhost:3000,http://localhost
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  # Workers Kafka (même image, commande différente)
+  worker-persister:
+    image: fraud-rdc/workers:dev
+    build:
+      context: .
+      dockerfile: services/workers/Dockerfile
+    container_name: nuru_worker_persister
+    command: ["python", "-m", "workers.persister"]
+    restart: unless-stopped
+    env_file: .env
+    environment: &worker_env
+      POSTGRES_HOST: postgres
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    depends_on: &worker_deps
+      backoffice-api:
+        condition: service_healthy   # garantit que les migrations sont appliquées
+
+  worker-alerter:
+    image: fraud-rdc/workers:dev
+    container_name: nuru_worker_alerter
+    command: ["python", "-m", "workers.alerter"]
+    restart: unless-stopped
+    env_file: .env
+    environment: *worker_env
+    depends_on: *worker_deps
+
+  worker-auditor:
+    image: fraud-rdc/workers:dev
+    container_name: nuru_worker_auditor
+    command: ["python", "-m", "workers.auditor"]
+    restart: unless-stopped
+    env_file: .env
+    environment: *worker_env
+    depends_on: *worker_deps
+
+  # Boîte mail locale : les e-mails d'alerte s'affichent sur http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: nuru_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+
 volumes:
   postgres_data:
   redis_data:

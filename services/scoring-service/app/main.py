@@ -79,7 +79,7 @@ def _score(tx: UnifiedTransaction) -> dict:
     tx_in = tx.to_feature_input(tx.status)
 
     def decide(feats, x, history):
-        res = scorer.score(x, history, explain=True, top_k=settings.EXPLAIN_TOP_K)
+        res = scorer.score(x, history, explain="auto", top_k=settings.EXPLAIN_TOP_K)
         dec = state["policy"].decide(res.probability, tx.amount_usd, tx.channel.value, feats, tx_in)
         return (res, dec), ("FAILED" if dec["action"] == "BLOCK" else "SUCCESS")
 
