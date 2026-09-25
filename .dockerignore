@@ -1,0 +1,14 @@
+.git
+venv
+.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/.next
+ml/data
+ml/reports
+ml/_backup_*
+ml/_retrain_log.txt
+mlruns
+*.env
+.env

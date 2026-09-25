@@ -1,5 +1,5 @@
 {
-    "threshold": 0.5148690426720947,
+    "threshold": 0.5171225045356815,
     "input_dim": 58,
     "lstm_hidden_dim": 64,
     "branch_order": [
@@ -8,11 +8,11 @@
         "autoencoder"
     ],
     "meta_learner_coefficients": {
-        "xgboost": 1.3845,
-        "lstm_attention": 1.3011,
-        "autoencoder": 0.2749
+        "xgboost": 1.3834,
+        "lstm_attention": 1.2967,
+        "autoencoder": 0.2758
     },
-    "trained_at": "2026-09-25T23:07:43",
+    "trained_at": "2026-09-25T23:48:30",
     "train_config": {
         "seed": 42,
         "xgb_estimators": 600,
@@ -29,10 +29,10 @@
         "pr_auc": 0.9911,
         "roc_auc": 0.9998,
         "recall_at_1pct_fpr": 0.9987,
-        "precision": 0.9689,
+        "precision": 0.9702,
         "recall": 0.9335,
-        "f1": 0.9509,
-        "false_positive_rate": 0.00046
+        "f1": 0.9515,
+        "false_positive_rate": 0.00044
     },
     "test_metrics_by_channel": {
         "MOBILE_MONEY": {
@@ -41,10 +41,10 @@
             "pr_auc": 0.9871,
             "roc_auc": 0.9998,
             "recall_at_1pct_fpr": 0.9984,
-            "precision": 0.9643,
+            "precision": 0.9659,
             "recall": 0.9175,
-            "f1": 0.9403,
-            "false_positive_rate": 0.00046
+            "f1": 0.9411,
+            "false_positive_rate": 0.00044
         },
         "VISA_VIRTUAL": {
             "n": 4083,

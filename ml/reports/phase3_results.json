@@ -8,21 +8,21 @@
     "skip_baselines": false,
     "use_mlflow": false
   },
-  "training_seconds": 247,
+  "training_seconds": 329,
   "results": {
     "hybrid": {
       "model": "Hybride (XGB + LSTM + AE)",
-      "threshold": 0.5148690426720947,
+      "threshold": 0.5171225045356815,
       "test": {
         "n": 50309,
         "n_fraud": 767,
         "pr_auc": 0.9911,
         "roc_auc": 0.9998,
         "recall_at_1pct_fpr": 0.9987,
-        "precision": 0.9689,
+        "precision": 0.9702,
         "recall": 0.9335,
-        "f1": 0.9509,
-        "false_positive_rate": 0.00046
+        "f1": 0.9515,
+        "false_positive_rate": 0.00044
       },
       "test_by_channel": {
         "MOBILE_MONEY": {
@@ -31,10 +31,10 @@
           "pr_auc": 0.9871,
           "roc_auc": 0.9998,
           "recall_at_1pct_fpr": 0.9984,
-          "precision": 0.9643,
+          "precision": 0.9659,
           "recall": 0.9175,
-          "f1": 0.9403,
-          "false_positive_rate": 0.00046
+          "f1": 0.9411,
+          "false_positive_rate": 0.00044
         },
         "VISA_VIRTUAL": {
           "n": 4083,
@@ -85,7 +85,7 @@
     },
     "branch_xgboost": {
       "model": "Branche seule : xgboost",
-      "threshold": 2.6565682888031006,
+      "threshold": 2.6564018726348877,
       "test": {
         "n": 50309,
         "n_fraud": 767,
@@ -158,7 +158,7 @@
     },
     "branch_lstm_attention": {
       "model": "Branche seule : lstm_attention",
-      "threshold": 3.823622703552246,
+      "threshold": 3.8236215114593506,
       "test": {
         "n": 50309,
         "n_fraud": 767,
@@ -231,12 +231,12 @@
     },
     "branch_autoencoder": {
       "model": "Branche seule : autoencoder",
-      "threshold": 0.9232736229896545,
+      "threshold": 0.9390875697135925,
       "test": {
         "n": 50309,
         "n_fraud": 767,
-        "pr_auc": 0.728,
-        "roc_auc": 0.9527,
+        "pr_auc": 0.7279,
+        "roc_auc": 0.9519,
         "recall_at_1pct_fpr": 0.6806,
         "precision": 0.9612,
         "recall": 0.6467,
@@ -247,8 +247,8 @@
         "MOBILE_MONEY": {
           "n": 46226,
           "n_fraud": 618,
-          "pr_auc": 0.6652,
-          "roc_auc": 0.9463,
+          "pr_auc": 0.6649,
+          "roc_auc": 0.9452,
           "recall_at_1pct_fpr": 0.6214,
           "precision": 0.9693,
           "recall": 0.5615,
@@ -304,7 +304,7 @@
     },
     "ablation_without_autoencoder": {
       "model": "Hybride sans autoencoder",
-      "threshold": 0.41813527521813565,
+      "threshold": 0.41814052288156456,
       "test": {
         "n": 50309,
         "n_fraud": 767,
@@ -377,29 +377,29 @@
     },
     "ablation_without_lstm_attention": {
       "model": "Hybride sans lstm_attention",
-      "threshold": 0.5364053000601948,
+      "threshold": 0.5276906219809501,
       "test": {
         "n": 50309,
         "n_fraud": 767,
         "pr_auc": 0.9864,
         "roc_auc": 0.9997,
         "recall_at_1pct_fpr": 0.9948,
-        "precision": 0.9644,
+        "precision": 0.9631,
         "recall": 0.9192,
-        "f1": 0.9413,
-        "false_positive_rate": 0.00052
+        "f1": 0.9406,
+        "false_positive_rate": 0.00054
       },
       "test_by_channel": {
         "MOBILE_MONEY": {
           "n": 46226,
           "n_fraud": 618,
-          "pr_auc": 0.9809,
+          "pr_auc": 0.9808,
           "roc_auc": 0.9996,
           "recall_at_1pct_fpr": 0.9919,
-          "precision": 0.9586,
+          "precision": 0.957,
           "recall": 0.8997,
-          "f1": 0.9282,
-          "false_positive_rate": 0.00053
+          "f1": 0.9274,
+          "false_positive_rate": 0.00055
         },
         "VISA_VIRTUAL": {
           "n": 4083,
@@ -450,17 +450,17 @@
     },
     "ablation_without_xgboost": {
       "model": "Hybride sans xgboost",
-      "threshold": 0.6476818733525435,
+      "threshold": 0.4428211361416725,
       "test": {
         "n": 50309,
         "n_fraud": 767,
         "pr_auc": 0.9863,
         "roc_auc": 0.9997,
         "recall_at_1pct_fpr": 0.9961,
-        "precision": 0.983,
-        "recall": 0.9035,
-        "f1": 0.9416,
-        "false_positive_rate": 0.00024
+        "precision": 0.9509,
+        "recall": 0.9335,
+        "f1": 0.9421,
+        "false_positive_rate": 0.00075
       },
       "test_by_channel": {
         "MOBILE_MONEY": {
@@ -469,10 +469,10 @@
           "pr_auc": 0.98,
           "roc_auc": 0.9996,
           "recall_at_1pct_fpr": 0.9935,
-          "precision": 0.9784,
-          "recall": 0.8803,
-          "f1": 0.9267,
-          "false_positive_rate": 0.00026
+          "precision": 0.9403,
+          "recall": 0.9175,
+          "f1": 0.9287,
+          "false_positive_rate": 0.00079
         },
         "VISA_VIRTUAL": {
           "n": 4083,
@@ -480,10 +480,10 @@
           "pr_auc": 1.0,
           "roc_auc": 1.0,
           "recall_at_1pct_fpr": 1.0,
-          "precision": 1.0,
+          "precision": 0.9933,
           "recall": 1.0,
-          "f1": 1.0,
-          "false_positive_rate": 0.0
+          "f1": 0.9967,
+          "false_positive_rate": 0.00025
         }
       },
       "test_recall_by_fraud_type": {
@@ -509,11 +509,11 @@
         },
         "SMURFING": {
           "n": 100,
-          "recall": 0.94
+          "recall": 0.97
         },
         "SOCIAL_ENGINEERING": {
           "n": 160,
-          "recall": 0.575
+          "recall": 0.7
         },
         "TOPUP_DRAIN": {
           "n": 16,
@@ -523,12 +523,12 @@
     },
     "baseline_rules": {
       "model": "Règles métier",
-      "threshold": 1.2298206069874942,
+      "threshold": 1.2298206107127845,
       "test": {
         "n": 50309,
         "n_fraud": 767,
-        "pr_auc": 0.2591,
-        "roc_auc": 0.7892,
+        "pr_auc": 0.2635,
+        "roc_auc": 0.7884,
         "recall_at_1pct_fpr": 0.292,
         "precision": 0.6627,
         "recall": 0.292,
@@ -539,9 +539,9 @@
         "MOBILE_MONEY": {
           "n": 46226,
           "n_fraud": 618,
-          "pr_auc": 0.2062,
-          "roc_auc": 0.7466,
-          "recall_at_1pct_fpr": 0.1909,
+          "pr_auc": 0.1993,
+          "roc_auc": 0.7448,
+          "recall_at_1pct_fpr": 0.2411,
           "precision": 0.7564,
           "recall": 0.1909,
           "f1": 0.3049,
@@ -550,8 +550,8 @@
         "VISA_VIRTUAL": {
           "n": 4083,
           "n_fraud": 149,
-          "pr_auc": 0.5413,
-          "roc_auc": 0.9522,
+          "pr_auc": 0.5503,
+          "roc_auc": 0.9528,
           "recall_at_1pct_fpr": 0.2349,
           "precision": 0.5824,
           "recall": 0.7114,
@@ -596,29 +596,29 @@
     },
     "baseline_logreg": {
       "model": "Régression logistique",
-      "threshold": 5.200964852336396,
+      "threshold": 5.505599992388518,
       "test": {
         "n": 50309,
         "n_fraud": 767,
-        "pr_auc": 0.9372,
+        "pr_auc": 0.9374,
         "roc_auc": 0.9979,
         "recall_at_1pct_fpr": 0.9518,
-        "precision": 0.9096,
-        "recall": 0.8396,
-        "f1": 0.8732,
-        "false_positive_rate": 0.00129
+        "precision": 0.9255,
+        "recall": 0.8266,
+        "f1": 0.8733,
+        "false_positive_rate": 0.00103
       },
       "test_by_channel": {
         "MOBILE_MONEY": {
           "n": 46226,
           "n_fraud": 618,
-          "pr_auc": 0.911,
+          "pr_auc": 0.9112,
           "roc_auc": 0.9973,
           "recall_at_1pct_fpr": 0.9369,
-          "precision": 0.8855,
-          "recall": 0.801,
-          "f1": 0.8411,
-          "false_positive_rate": 0.0014
+          "precision": 0.9049,
+          "recall": 0.7848,
+          "f1": 0.8406,
+          "false_positive_rate": 0.00112
         },
         "VISA_VIRTUAL": {
           "n": 4083,
@@ -655,11 +655,11 @@
         },
         "SMURFING": {
           "n": 100,
-          "recall": 0.83
+          "recall": 0.81
         },
         "SOCIAL_ENGINEERING": {
           "n": 160,
-          "recall": 0.3375
+          "recall": 0.2875
         },
         "TOPUP_DRAIN": {
           "n": 16,
@@ -669,29 +669,29 @@
     },
     "baseline_random_forest": {
       "model": "Random Forest",
-      "threshold": 0.5119910487759337,
+      "threshold": 0.4723422925478438,
       "test": {
         "n": 50309,
         "n_fraud": 767,
-        "pr_auc": 0.9864,
-        "roc_auc": 0.9997,
+        "pr_auc": 0.9858,
+        "roc_auc": 0.9996,
         "recall_at_1pct_fpr": 0.9948,
-        "precision": 0.9749,
-        "recall": 0.9126,
-        "f1": 0.9428,
-        "false_positive_rate": 0.00036
+        "precision": 0.97,
+        "recall": 0.927,
+        "f1": 0.948,
+        "false_positive_rate": 0.00044
       },
       "test_by_channel": {
         "MOBILE_MONEY": {
           "n": 46226,
           "n_fraud": 618,
-          "pr_auc": 0.9808,
-          "roc_auc": 0.9996,
-          "recall_at_1pct_fpr": 0.9919,
-          "precision": 0.9718,
-          "recall": 0.8916,
-          "f1": 0.93,
-          "false_positive_rate": 0.00035
+          "pr_auc": 0.9799,
+          "roc_auc": 0.9995,
+          "recall_at_1pct_fpr": 0.9935,
+          "precision": 0.9656,
+          "recall": 0.9094,
+          "f1": 0.9367,
+          "false_positive_rate": 0.00044
         },
         "VISA_VIRTUAL": {
           "n": 4083,
@@ -728,11 +728,11 @@
         },
         "SMURFING": {
           "n": 100,
-          "recall": 0.9
+          "recall": 0.96
         },
         "SOCIAL_ENGINEERING": {
           "n": 160,
-          "recall": 0.6438
+          "recall": 0.675
         },
         "TOPUP_DRAIN": {
           "n": 16,
