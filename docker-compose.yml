@@ -236,12 +236,26 @@ services:
       PROMETHEUS_URL: http://prometheus:9090
       RETRAIN_CHECK_INTERVAL_S: "600"
       RETRAIN_NEW_LABELS: "500"
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes:
       - ./ml/artifacts:/srv/ml/artifacts          # écrit le nouveau champion
       - ./ml/data:/srv/ml/data:ro                 # historique d'entraînement
     depends_on:
       backoffice-api:
         condition: service_healthy
+
+  # Suivi des expériences et registre des modèles : http://localhost:5000
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: nuru_mlflow
+    restart: unless-stopped
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000",
+              "--backend-store-uri", "sqlite:////mlflow/mlflow.db",
+              "--default-artifact-root", "/mlflow/artifacts"]
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - "5000:5000"
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.62.0
@@ -323,3 +337,4 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  mlflow_data:

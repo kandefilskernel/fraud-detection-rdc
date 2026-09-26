@@ -1,5 +1,5 @@
 // Test de charge : trafic opérateurs vers /ingest (Nginx -> integration-layer -> scoring).
-// docker run --rm --network fraud-detection-rdc_default -v ./scripts/load:/load grafana/k6 run /load/k6_ingest.js
+// docker run --rm --network fraud-detection-rdc_default -v ./scripts/load:/load grafana/k6:0.53.0 run /load/k6_ingest.js
 import http from "k6/http";
 import { check } from "k6";
 import { SharedArray } from "k6/data";

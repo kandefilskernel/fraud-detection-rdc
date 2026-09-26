@@ -59,6 +59,7 @@ python scripts\seed_database.py     # comptes de démonstration (analyste, super
 | http://localhost:9090 | Prometheus (cibles, règles d'alerte) |
 | http://localhost:8088 | Console Kafka (Redpanda) |
 | http://localhost:8025 | Boîte mail locale (e-mails d'alerte) |
+| http://localhost:5000 | MLflow (expériences et registre des modèles) |
 
 ### 4. Démonstration temps réel
 ```powershell
@@ -84,7 +85,7 @@ le scoring-service le recharge alors à chaud (sans interruption).
 .\scripts\run_tests.ps1                               # toutes les suites (PostgreSQL requis)
 python -m ml.serving.parity_check --n 2000            # parité entraînement / production
 python scripts\load\build_payloads.py
-docker run --rm --network fraud-detection-rdc_default -v ${PWD}/scripts/load:/load grafana/k6 run /load/k6_ingest.js
+docker run --rm --network fraud-detection-rdc_default -v ${PWD}/scripts/load:/load grafana/k6:0.53.0 run /load/k6_ingest.js
 kubectl kustomize infra\kubernetes\overlays\kinshasa  # manifests zone Kinshasa (ou katanga)
 ```
 

@@ -32,3 +32,5 @@ frontend/*.tsbuildinfo
 
 # Test de charge (généré)
 scripts/load/payloads.json
+
+mlflow.db
