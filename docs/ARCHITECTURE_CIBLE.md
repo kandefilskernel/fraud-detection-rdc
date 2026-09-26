@@ -125,3 +125,29 @@ Pour le jury, il faut montrer que le modèle ne fait pas que « reconnaître le 
 3. **Bruit d'étiquettes** : une partie des fraudes non signalées (réalité terrain).
 4. **Métrique métier** : montant de fraude évité, nombre de clients honnêtes dérangés pour 10 000 transactions.
 5. **Latence** mesurée (p50 / p99) transaction par transaction.
+
+## 5. Mesures sur la plateforme complète et limites connues
+
+Mesures sur un portable 4 cœurs / 8 Go faisant tourner les 21 conteneurs :
+
+| Mesure | Valeur | Remarque |
+|---|---|---|
+| Latence bout-en-bout (réseau Docker, 40 tx/s) | p50 ≈ 19 ms, p95 ≈ 79 ms | intégration + scoring |
+| Latence depuis Windows | + ~40 ms | relais de ports de Docker Desktop, absent en production |
+| Débit soutenu | ≈ 30-40 tx/s | limité par le CPU partagé entre 21 conteneurs ; montée en charge horizontale via HPA |
+| Fraudes interceptées en rejeu | 22/22 (1 500 tx), 9/9 (1 500 tx) | 1 client honnête bloqué |
+
+Problèmes rencontrés et corrigés (utiles pour la discussion du mémoire) :
+1. **Versions de bibliothèques** : un modèle sérialisé avec d'autres versions ne se recharge pas ;
+   versions figées identiques entre entraînement et service.
+2. **Parité** : identifiants de portefeuille lus comme flottants, et arbres XGBoost au-delà de
+   l'arrêt précoce ; corrigés, parité vérifiée à 1e-7.
+3. **Transactions en retard** (hors ordre chronologique) : écarts de temps négatifs ; bornés à 0.
+4. **Contention de threads** : OpenMP multipliait les threads par worker ; un thread par worker.
+5. **Dérive** : les variables calendaires et cumulatives dérivent par construction ; seules les
+   variables comportementales et le score déclenchent l'alarme. Dérive réelle observée : soldes
+   (`log_balance_before`, `amount_to_balance`) et activité des agents.
+6. **PSI des variables binaires** : les quantiles se confondaient en une classe ; calcul par catégorie.
+
+Limites : données synthétiques, formats d'API opérateurs simulés, pas d'audit de sécurité, pas de
+test à l'échelle nationale (milliers de tx/s), ingénierie sociale détectée à 69 % seulement.

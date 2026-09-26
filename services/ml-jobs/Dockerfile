@@ -1,9 +1,12 @@
+# syntax=docker/dockerfile:1
 # Contexte de build : racine du dépôt
 FROM python:3.12-slim AS deps
-ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY services/ml-jobs/requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt \
- && pip install --prefix=/install --no-deps xgboost==2.0.3
+# cache pip persistant + reprises : une coupure réseau ne force pas à tout retélécharger
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --retries 10 --timeout 120 --prefix=/install -r requirements.txt \
+ && pip install --retries 10 --timeout 120 --prefix=/install --no-deps xgboost==2.0.3
 
 FROM python:3.12-slim
 # pas de limite de threads ici : le réentraînement doit utiliser tous les cœurs

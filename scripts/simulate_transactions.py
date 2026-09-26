@@ -93,14 +93,17 @@ async def main():
                 try:
                     resp = await client.post(f"/v1/transactions/{prov}", json=ADAPTERS[prov].from_unified(r),
                                              headers={"X-API-Key": KEYS[prov]})
-                    d = resp.json()
+                    try:
+                        d = resp.json()
+                    except ValueError:
+                        d = {"detail": resp.text[:200]}
                 except httpx.HTTPError as e:
                     stats["erreur"] += 1
-                    print("erreur :", e)
+                    print(f"erreur réseau ({type(e).__name__}) sur {r['transaction_id']} : {e or 'délai dépassé'}")
                     return
             if resp.status_code != 200:
                 stats["erreur"] += 1
-                print(resp.status_code, d)
+                print(f"erreur HTTP {resp.status_code} sur {r['transaction_id']} : {d}")
                 return
             action = d["action"]
             stats[action] += 1

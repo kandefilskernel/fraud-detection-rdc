@@ -1,4 +1,4 @@
-# Pipeline ML complet : phase 1 (données) -> phase 2 (variables) -> phase 3 (modèles)
+﻿# Pipeline ML complet : données -> variables -> modèles -> référence de dérive
 # Usage (depuis la racine du projet) :
 #   .\scripts\run_pipeline.ps1                 # complet
 #   .\scripts\run_pipeline.ps1 -Quick          # essai rapide
@@ -27,4 +27,8 @@ Write-Host "`n=== Phase 3 : entraînement et comparaison des modèles ===" -Fore
 $trainArgs = @()
 if ($Quick) { $trainArgs += "--quick" }
 python -m ml.training.train_model @trainArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host "`n=== Référence de dérive (supervision du modèle en production) ===" -ForegroundColor Cyan
+python -m ml.monitoring.build_reference
 exit $LASTEXITCODE

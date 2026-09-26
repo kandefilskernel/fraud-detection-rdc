@@ -73,3 +73,20 @@ def test_audit_log_is_append_only():
         with conn, conn.cursor() as cur:
             cur.execute("UPDATE audit_log SET actor = 'pirate'")
     conn.close()
+
+
+def test_customer_complaint_labels_missed_fraud(client, analyst):
+    """Fraude laissée passer (APPROVE) puis signalée par le client : étiquette 1 + dossier clos."""
+    with engine.begin() as c:
+        c.execute(insert(ScoredTransaction).values(
+            transaction_id="TX-MISSED", tx_time=datetime(2025, 11, 4, 9, 0), scored_at=datetime.now(timezone.utc),
+            user_id="U10", channel="MOBILE_MONEY", operator="ORANGE", tx_type="P2P_SEND", access_channel="USSD",
+            amount=40.0, currency="USD", amount_usd=40.0, province="Kinshasa", device_id="D10",
+            fraud_probability=0.02, risk_level="FAIBLE", action="APPROVE", reason="test", rules_triggered=[],
+            model_version="t", latency_ms=8.0, degraded=False, explanation={}, features={}))
+    r = client.post("/cases/complaint/TX-MISSED", headers=analyst, json={"note": "Opération non reconnue"})
+    assert r.status_code == 201 and r.json()["status"] == "FRAUDE_CONFIRMEE"
+    assert client.get("/transactions/TX-MISSED", headers=analyst).json()["label"] == 1
+    # une seconde plainte sur un dossier clos est refusée
+    assert client.post("/cases/complaint/TX-MISSED", headers=analyst, json={"note": "doublon"}).status_code == 409
+    assert client.post("/cases/complaint/INCONNUE", headers=analyst, json={"note": "xxxxx"}).status_code == 404
