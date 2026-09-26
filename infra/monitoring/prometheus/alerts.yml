@@ -1,0 +1,52 @@
+groups:
+  - name: disponibilite
+    rules:
+      - alert: ServiceIndisponible
+        expr: up == 0
+        for: 1m
+        labels: { severity: critique }
+        annotations: { summary: "{{ $labels.job }} ({{ $labels.instance }}) ne répond plus" }
+
+  - name: scoring
+    rules:
+      - alert: LatenceScoringElevee
+        expr: histogram_quantile(0.99, sum(rate(scoring_latency_seconds_bucket[5m])) by (le)) > 0.1
+        for: 5m
+        labels: { severity: haute }
+        annotations: { summary: "p99 du scoring > 100 ms depuis 5 min" }
+      - alert: ErreursScoring
+        expr: sum(rate(scoring_errors_total[5m])) > 0
+        for: 2m
+        labels: { severity: haute }
+        annotations: { summary: "Erreurs de scoring (Redis ou verrou) en cours" }
+      - alert: ModeDegrade
+        expr: sum(increase(scoring_degraded_total[5m])) > 0
+        labels: { severity: moyenne }
+        annotations: { summary: "Des scores sont rendus sans LSTM ou autoencodeur" }
+      - alert: PicTauxAlerte
+        expr: |
+          sum(rate(scoring_decisions_total{action!="APPROVE"}[5m]))
+            / sum(rate(scoring_decisions_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: haute }
+        annotations: { summary: "Plus de 5 % d'alertes : attaque en cours ou dérive du modèle" }
+
+  - name: evenements
+    rules:
+      - alert: EchecsPublicationKafka
+        expr: delta(scoring_kafka_publish_failures[5m]) > 0
+        labels: { severity: haute }
+        annotations: { summary: "Des décisions ne sont pas publiées dans Kafka (journal incomplet)" }
+      - alert: WorkerEnEchec
+        expr: sum by (worker) (increase(worker_messages_total{outcome="retry"}[5m])) > 0
+        for: 2m
+        labels: { severity: haute }
+        annotations: { summary: "Le worker {{ $labels.worker }} rejoue ses lots (base indisponible ?)" }
+
+  - name: modele
+    rules:
+      - alert: DeriveDuModele
+        expr: drift_alarm == 1
+        for: 10m
+        labels: { severity: moyenne }
+        annotations: { summary: "Dérive : variables comportementales ou score déplacés — envisager un réentraînement" }

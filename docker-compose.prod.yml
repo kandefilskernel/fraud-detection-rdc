@@ -1,0 +1,24 @@
+# Surcharge « production-like » : docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#  - seuls Nginx (80) et Grafana (3001) restent exposés ; bases et services internes fermés
+#  - limites de ressources, redémarrage systématique
+services:
+  postgres:        { ports: !reset [], restart: always, deploy: { resources: { limits: { cpus: "2", memory: 2g } } } }
+  redis:           { ports: !reset [], restart: always, deploy: { resources: { limits: { cpus: "1", memory: 1g } } } }
+  redpanda:        { ports: !reset [], restart: always }
+  redpanda-console: { profiles: [outils] }
+  mailpit:         { profiles: [outils] }
+  scoring-service:
+    ports: !reset []
+    restart: always
+    deploy: { resources: { limits: { cpus: "3", memory: 2g } } }
+  integration-layer:
+    ports: !reset []
+    restart: always
+    environment: { FAIL_OPEN: "false" }
+  backoffice-api:  { ports: !reset [], restart: always }
+  prometheus:      { ports: !reset [], restart: always }
+  worker-persister: { restart: always }
+  worker-alerter:  { restart: always }
+  worker-auditor:  { restart: always }
+  frontend:        { restart: always }
+  nginx:           { restart: always }

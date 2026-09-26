@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: fraude-rdc
+    folder: Détection de fraude RDC
+    type: file
+    options: { path: /var/lib/grafana/dashboards }

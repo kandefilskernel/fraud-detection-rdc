@@ -1,0 +1,35 @@
+# Socle Kubernetes : toute la plateforme dans un namespace.
+# Rendu : kubectl kustomize infra/kubernetes/overlays/kinshasa
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fraud-rdc
+labels:
+  - pairs: { app.kubernetes.io/part-of: fraud-detection-rdc }
+resources:
+  - namespace.yaml
+  - config/configmap.yaml
+  - data/postgres.yaml
+  - data/redis.yaml
+  - data/redpanda.yaml
+  - apps/feature-store-seeder.yaml
+  - apps/scoring-service.yaml
+  - apps/integration-layer.yaml
+  - apps/backoffice-api.yaml
+  - apps/workers.yaml
+  - apps/drift-monitor.yaml
+  - apps/frontend.yaml
+  - network/ingress.yaml
+  - network/network-policies.yaml
+secretGenerator:
+  # Valeurs de DÉVELOPPEMENT. En production : secret géré hors dépôt
+  # (kubectl create secret, Sealed Secrets ou coffre-fort), jamais commité.
+  - name: app-secrets
+    envs: [config/secrets.env.example]
+images:
+  - { name: fraud-rdc/scoring-service, newTag: dev }
+  - { name: fraud-rdc/integration-layer, newTag: dev }
+  - { name: fraud-rdc/backoffice-api, newTag: dev }
+  - { name: fraud-rdc/workers, newTag: dev }
+  - { name: fraud-rdc/ml-jobs, newTag: dev }
+  - { name: fraud-rdc/frontend, newTag: dev }
+  - { name: fraud-rdc/seed-data, newTag: dev }

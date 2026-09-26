@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata: { name: backoffice-api, labels: { app: backoffice-api } }
+spec:
+  selector: { app: backoffice-api }
+  ports: [{ name: http, port: 8003 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: backoffice-api, labels: { app: backoffice-api, tier: app } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: backoffice-api } }
+  template:
+    metadata:
+      labels: { app: backoffice-api, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "8003" }
+    spec:
+      containers:
+        - name: backoffice
+          image: fraud-rdc/backoffice-api
+          # les migrations sont faites par le Job db-migrate (pas à chaque réplica)
+          command: ["sh", "-c", "mkdir -p $PROMETHEUS_MULTIPROC_DIR && exec uvicorn app.main:app --host 0.0.0.0 --port 8003 --workers 2"]
+          ports: [{ containerPort: 8003, name: http }]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+          readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 15, initialDelaySeconds: 20 }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }

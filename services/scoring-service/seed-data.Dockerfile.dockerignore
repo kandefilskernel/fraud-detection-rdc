@@ -1,0 +1,5 @@
+# ignore propre à seed-data.Dockerfile : seules les données brutes sont envoyées
+*
+!ml/data/raw/transactions.csv
+!ml/data/raw/users.csv
+!ml/data/raw/generation_metadata.json

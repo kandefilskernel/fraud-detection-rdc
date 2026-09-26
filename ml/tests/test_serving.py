@@ -110,3 +110,16 @@ def test_rules_can_only_strengthen_the_decision():
     d = DecisionPolicy(threshold=0.5).decide(0.001, 50, "MOBILE_MONEY", feats, TX)
     assert d["action"] == "VERIFY"
     assert "NOUVEL_APPAREIL_VIDAGE_COMPTE" in d["rules_triggered"]
+
+
+def test_late_transaction_does_not_crash_feature_extraction():
+    """Transaction arrivée en retard (horloges d'opérateurs, reprise) : pas d'erreur de domaine."""
+    store = RedisFeatureStore(fakeredis.FakeRedis(), pd.Timestamp("2025-06-01").timestamp())
+    store.bulk_load(BehavioralFeatureExtractor(USERS, pd.Timestamp("2025-06-01")), {})
+    zero = lambda f: np.zeros(58, dtype=np.float32)  # noqa: E731
+    topup = make_tx(30, channel="VISA_VIRTUAL", tx_type="CARD_TOPUP", counterparty_id=None)
+    store.compute(topup, zero)
+    late = make_tx(5, channel="VISA_VIRTUAL", tx_type="CARD_PURCHASE", counterparty_id=None,
+                   merchant_id="M1", merchant_category="GROCERY", merchant_country="CD")
+    feats = store.compute(late, zero)["features"]
+    assert feats["log_mins_since_topup"] == 0.0 and feats["log_history_days"] >= 0.0

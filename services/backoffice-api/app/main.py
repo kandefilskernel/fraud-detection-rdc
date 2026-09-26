@@ -14,15 +14,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
+from shared.utils.metrics import metrics_response
 from app import events
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.routers import audit, auth, cases, reports, transactions
+from shared.logging.logger_config import configure_logging
+
+configure_logging("backoffice-api")
 
 
 @asynccontextmanager
@@ -56,4 +58,4 @@ def health():
 
 @app.get("/metrics")
 def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return metrics_response()

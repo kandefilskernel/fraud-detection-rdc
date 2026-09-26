@@ -15,8 +15,9 @@ from prometheus_client import Counter, Histogram, start_http_server
 from shared.kafka_config.topics import (TOPIC_ANALYST_FEEDBACK, TOPIC_AUDIT_LOGS, TOPIC_FRAUD_ALERTS,
                                         TOPIC_TRANSACTIONS_SCORED)
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"),
-                    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s")
+from shared.logging.logger_config import configure_logging  # noqa: E402
+
+configure_logging(os.getenv("WORKER_NAME", "worker"))
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
 # audit : 1 partition = ordre total, indispensable au chaînage par hachage
@@ -50,6 +51,7 @@ def ensure_topics() -> None:
 
 def run(worker: str, topics: list[str], handle_batch, batch_size: int = 500, metrics_port: int = 9100):
     """handle_batch(list[dict]) écrit en base ; en cas d'exception le lot est rejoué."""
+    configure_logging(worker)
     log = logging.getLogger(worker)
     ensure_topics()
     start_http_server(metrics_port)

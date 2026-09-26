@@ -8,18 +8,22 @@ scoring-service : décision de fraude synchrone, en temps réel.
 """
 from __future__ import annotations
 
+import json
+import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
 import redis
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+from prometheus_client import Counter, Gauge, Histogram
 
+from shared.utils.metrics import metrics_response
 from app.config import settings
 from app.events import EventPublisher
 from app.schemas import ScoreResponse
@@ -27,6 +31,9 @@ from ml.serving.decision import DecisionPolicy
 from ml.serving.feature_store import PREFIX, RedisFeatureStore
 from ml.serving.scorer import HybridScorer
 from shared.schemas.unified_transaction import UnifiedTransaction
+from shared.logging.logger_config import configure_logging
+
+configure_logging("scoring-service")
 
 LATENCY = Histogram("scoring_latency_seconds", "Latence de /v1/score",
                     buckets=(0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.5, 1))
@@ -36,9 +43,33 @@ DEGRADED = Counter("scoring_degraded_total", "Scores rendus en mode dégradé")
 ERRORS = Counter("scoring_errors_total", "Erreurs de scoring", ["kind"])
 PROBA = Histogram("scoring_fraud_probability", "Distribution des probabilités (dérive)",
                   buckets=(0.001, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.99))
-KAFKA_FAIL = Gauge("scoring_kafka_publish_failures", "Échecs cumulés de publication Kafka")
+KAFKA_FAIL = Gauge("scoring_kafka_publish_failures", "Échecs cumulés de publication Kafka",
+                   multiprocess_mode="livesum")
 
 state: dict = {}
+log = logging.getLogger("scoring")
+MODEL_VERSION = Gauge("scoring_model_info", "Version du modèle servie (1 = active)", ["version"],
+                      multiprocess_mode="livemax")
+RELOADS = Counter("scoring_model_reloads_total", "Rechargements à chaud du modèle")
+
+
+def _watch_model(stop: threading.Event, interval: float = 30.0) -> None:
+    """Recharge le modèle à chaud quand le réentraînement promeut un nouveau champion
+    (metadata.json est écrit en dernier par ml/retraining/retrain.py)."""
+    meta_path = Path(settings.ARTIFACTS_DIR) / "metadata.json"
+    while not stop.wait(interval):
+        try:
+            version = json.loads(meta_path.read_text(encoding="utf-8")).get("trained_at")
+            current = state["scorer"].model_version
+            if version and version != current:
+                new = HybridScorer(settings.ARTIFACTS_DIR)      # chargé à côté, puis échange atomique
+                state["scorer"], state["policy"] = new, DecisionPolicy(threshold=new.threshold)
+                MODEL_VERSION.labels(current).set(0)
+                MODEL_VERSION.labels(new.model_version).set(1)
+                RELOADS.inc()
+                log.warning("nouveau modèle chargé à chaud : %s -> %s", current, new.model_version)
+        except Exception:  # noqa: BLE001 — fichiers en cours d'écriture : on réessaie plus tard
+            log.exception("rechargement du modèle impossible pour l'instant")
 
 
 @asynccontextmanager
@@ -47,7 +78,6 @@ async def lifespan(_app: FastAPI):
     meta_raw = r.get(f"{PREFIX}:meta")
     if meta_raw is None:
         raise RuntimeError("Feature store vide : lancer python -m ml.serving.seed_feature_store")
-    import json
     meta = json.loads(meta_raw)
     scorer = HybridScorer(settings.ARTIFACTS_DIR)
     state.update(
@@ -58,7 +88,11 @@ async def lifespan(_app: FastAPI):
         events=EventPublisher(settings.KAFKA_BOOTSTRAP_SERVERS, settings.KAFKA_ENABLED),
         api_keys={k.strip() for k in settings.SCORING_API_KEYS.split(",") if k.strip()},
     )
+    MODEL_VERSION.labels(scorer.model_version).set(1)
+    stop = threading.Event()
+    threading.Thread(target=_watch_model, args=(stop,), daemon=True).start()
     yield
+    stop.set()
     state["events"].flush()
 
 
@@ -118,11 +152,19 @@ async def score(tx: UnifiedTransaction):
         except redis.RedisError:
             ERRORS.labels("redis").inc()
             raise HTTPException(status_code=503, detail="feature store indisponible")
+        except Exception:  # noqa: BLE001 — jamais de 500 muet : l'appelant applique sa politique de repli
+            ERRORS.labels("internal").inc()
+            log.exception("échec du scoring", extra={"transaction_id": tx.transaction_id})
+            raise HTTPException(status_code=500, detail="erreur interne du scoring")
     DECISIONS.labels(result["action"], tx.channel.value).inc()
     RISK.labels(result["risk_level"]).inc()
     PROBA.observe(result["fraud_probability"])
     if result["degraded"]:
         DEGRADED.inc()
+    if result["action"] != "APPROVE":
+        log.warning("alerte %s", result["action"], extra={
+            "transaction_id": tx.transaction_id, "user_id": tx.user_id, "action": result["action"],
+            "latency_ms": result["latency_ms"]})
 
     event = {
         "event_id": uuid.uuid4().hex,
@@ -153,4 +195,4 @@ def health():
 
 @app.get("/metrics")
 def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return metrics_response()

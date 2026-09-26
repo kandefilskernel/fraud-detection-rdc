@@ -1,0 +1,44 @@
+# Broker d'événements (API Kafka). En production : 3 nœuds et facteur de réplication 3.
+apiVersion: v1
+kind: Service
+metadata: { name: redpanda, labels: { app: redpanda, tier: data } }
+spec:
+  clusterIP: None
+  selector: { app: redpanda }
+  ports:
+    - { name: kafka, port: 9092 }
+    - { name: admin, port: 9644 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: redpanda, labels: { app: redpanda, tier: data } }
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector: { matchLabels: { app: redpanda } }
+  template:
+    metadata:
+      labels: { app: redpanda, tier: data }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9644", prometheus.io/path: /public_metrics }
+    spec:
+      containers:
+        - name: redpanda
+          image: redpandadata/redpanda:v24.1.7
+          args:
+            - redpanda start
+            - --mode dev-container
+            - --smp 1
+            - --memory 1G
+            - --kafka-addr internal://0.0.0.0:9092
+            - --advertise-kafka-addr internal://redpanda:9092
+          ports: [{ containerPort: 9092, name: kafka }, { containerPort: 9644, name: admin }]
+          readinessProbe:
+            exec: { command: ["sh", "-c", "rpk cluster health | grep -E 'Healthy:.+true'"] }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 250m, memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
+          volumeMounts: [{ name: data, mountPath: /var/lib/redpanda/data }]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 20Gi } } }

@@ -1,0 +1,34 @@
+# Tâches d'initialisation : schéma de base (Alembic) puis amorçage du feature store.
+# Avec de vraies données, l'amorçage lit l'historique de l'opérateur (et non les CSV de démo).
+apiVersion: batch/v1
+kind: Job
+metadata: { name: db-migrate }
+spec:
+  backoffLimit: 10
+  template:
+    metadata: { labels: { app: db-migrate, tier: app } }
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: alembic
+          image: fraud-rdc/backoffice-api
+          command: ["alembic", "upgrade", "head"]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: { name: feature-store-seeder }
+spec:
+  backoffLimit: 10
+  template:
+    metadata: { labels: { app: feature-store-seeder, tier: app } }
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seeder
+          image: fraud-rdc/seed-data
+          command: ["python", "-m", "ml.serving.seed_feature_store", "--if-empty"]
+          envFrom: [{ configMapRef: { name: app-config } }]
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "2", memory: 3Gi }

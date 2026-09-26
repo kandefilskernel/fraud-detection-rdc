@@ -67,6 +67,38 @@ def list_cases(db: Session = Depends(get_db), _=Depends(get_current_user),
     return {"total": total, "counts": counts, "items": [CaseOut.model_validate(r).model_dump() for r in rows]}
 
 
+class Complaint(BaseModel):
+    note: str = Field(min_length=5, max_length=2000)
+
+
+@router.post("/complaint/{transaction_id}", response_model=CaseOut, status_code=201)
+def customer_complaint(transaction_id: str, body: Complaint, db: Session = Depends(get_db),
+                       user: BackofficeUser = Depends(get_current_user), pub: Publisher = Depends(get_publisher)):
+    """Plainte d'un client pour une opération qu'il ne reconnaît pas. C'est la seule source
+    d'étiquettes pour les fraudes que le modèle a LAISSÉ PASSER (faux négatifs) : sans elle,
+    le réentraînement n'apprendrait que de ses propres alertes."""
+    tx = db.scalar(select(ScoredTransaction).where(ScoredTransaction.transaction_id == transaction_id))
+    if tx is None:
+        raise HTTPException(404, "transaction introuvable")
+    now = datetime.now(timezone.utc)
+    c = db.scalar(select(Case).where(Case.transaction_id == transaction_id))
+    if c is None:
+        c = Case(transaction_id=tx.transaction_id, tx_time=tx.tx_time, user_id=tx.user_id, channel=tx.channel,
+                 tx_type=tx.tx_type, amount_usd=tx.amount_usd, fraud_probability=tx.fraud_probability,
+                 risk_level=tx.risk_level, action=tx.action)
+        db.add(c)
+    elif c.status in FINAL:
+        raise HTTPException(409, "dossier déjà clos")
+    c.status, c.resolution_note = "FRAUDE_CONFIRMEE", f"Plainte client : {body.note}"
+    c.resolved_by, c.resolved_at, c.assigned_to = user.id, now, c.assigned_to or user.id
+    tx.label, tx.labeled_at = 1, now
+    db.commit()
+    pub.feedback(tx.transaction_id, 1, user.email, c.id)
+    pub.audit(user.email, "PLAINTE_CLIENT", "transaction", tx.transaction_id,
+              {"case_id": c.id, "decision_modele": tx.action})
+    return c
+
+
 @router.get("/{case_id}", response_model=CaseOut)
 def get_case(case_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
     c = db.get(Case, case_id)

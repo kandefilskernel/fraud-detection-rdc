@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: scoring-service
+    static_configs: [{ targets: ["scoring-service:8001"] }]
+  - job_name: integration-layer
+    static_configs: [{ targets: ["integration-layer:8002"] }]
+  - job_name: backoffice-api
+    static_configs: [{ targets: ["backoffice-api:8003"] }]
+  - job_name: workers
+    static_configs:
+      - targets: ["worker-persister:9100", "worker-alerter:9100", "worker-auditor:9100"]
+  - job_name: drift-monitor
+    static_configs: [{ targets: ["drift-monitor:9101"] }]
+  - job_name: redis
+    static_configs: [{ targets: ["redis-exporter:9121"] }]
+  - job_name: postgres
+    static_configs: [{ targets: ["postgres-exporter:9187"] }]
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs: [{ targets: ["redpanda:9644"] }]

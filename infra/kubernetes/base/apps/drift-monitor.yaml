@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: drift-monitor, labels: { app: drift-monitor, tier: app } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: drift-monitor } }
+  template:
+    metadata:
+      labels: { app: drift-monitor, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9101" }
+    spec:
+      containers:
+        - name: drift
+          image: fraud-rdc/ml-jobs
+          command: ["python", "-m", "ml.monitoring.drift_detector", "--serve", "--interval", "300"]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+          ports: [{ containerPort: 9101, name: metrics }]
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { cpu: "1", memory: 1Gi }

@@ -65,6 +65,9 @@ class HybridScorer:
         self._coef = logreg.coef_[0].astype(np.float64)
         self._intercept = float(logreg.intercept_[0])
         self._booster = self.model.xgb.get_booster()
+        # une prédiction = une transaction : le parallélisme OpenMP (n_jobs=-1 à l'entraînement)
+        # ne fait ici que créer de la contention entre workers ; on force un seul thread
+        self._booster.set_param({"nthread": 1})
         # l'early stopping a retenu best_iteration : ne pas utiliser les arbres suivants
         best = getattr(self.model.xgb, "best_iteration", None)
         self._iter_range = (0, best + 1) if best is not None else (0, 0)

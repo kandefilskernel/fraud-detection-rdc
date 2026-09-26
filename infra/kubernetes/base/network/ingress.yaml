@@ -1,0 +1,32 @@
+# Remplace Nginx de docker-compose : contrôleur ingress-nginx du cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: operators-api
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/limit-rps: "200"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "2"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "2"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: fraude.local
+      http:
+        paths:
+          - path: /ingest(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend: { service: { name: integration-layer, port: { number: 8002 } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: dashboard }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: fraude.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 3000 } } }

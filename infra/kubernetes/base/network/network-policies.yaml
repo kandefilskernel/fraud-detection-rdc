@@ -1,0 +1,56 @@
+# Moindre privilège réseau : tout est refusé, puis seuls les flux nécessaires sont ouverts.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-ingress }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Données (PostgreSQL, Redis, Redpanda) : accessibles uniquement par les pods applicatifs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: data-from-apps }
+spec:
+  podSelector: { matchLabels: { tier: data } }
+  ingress:
+    - from: [{ podSelector: { matchLabels: { tier: app } } }, { podSelector: { matchLabels: { tier: data } } }]
+---
+# Le scoring n'est joignable que par l'integration-layer (jamais directement depuis l'extérieur)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: scoring-from-integration }
+spec:
+  podSelector: { matchLabels: { app: scoring-service } }
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: integration-layer } } }]
+      ports: [{ port: 8001 }]
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: backoffice-from-frontend }
+spec:
+  podSelector: { matchLabels: { app: backoffice-api } }
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: frontend } } }]
+      ports: [{ port: 8003 }]
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+---
+# Points d'entrée publics : depuis le contrôleur ingress uniquement
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: edge-from-ingress }
+spec:
+  podSelector: { matchExpressions: [{ key: app, operator: In, values: [frontend, integration-layer] }] }
+  ingress:
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } } }]
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+---
+# Métriques des workers et du détecteur de dérive : Prometheus uniquement
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: metrics-from-monitoring }
+spec:
+  podSelector: { matchExpressions: [{ key: app, operator: In, values: [worker-persister, worker-alerter, worker-auditor, drift-monitor] }] }
+  ingress:
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]

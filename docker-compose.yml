@@ -96,6 +96,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SCORING_API_KEYS: ${SCORING_API_KEYS:-dev-scoring-key}
+    volumes:
+      - ./ml/artifacts:/srv/ml/artifacts:ro   # rechargement à chaud après réentraînement
     ports:
       - "8001:8001"
     depends_on:
@@ -204,6 +206,108 @@ services:
       - frontend
       - integration-layer
 
+  # ------------------------------------------------------------------ supervision
+  drift-monitor:
+    image: fraud-rdc/ml-jobs:dev
+    build:
+      context: .
+      dockerfile: services/ml-jobs/Dockerfile
+    container_name: nuru_drift_monitor
+    command: ["python", "-m", "ml.monitoring.drift_detector", "--serve", "--interval", "60"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+    volumes:
+      - ./ml/artifacts:/srv/ml/artifacts:ro
+    depends_on:
+      backoffice-api:
+        condition: service_healthy
+
+  # Apprentissage continu : réentraîne quand assez d'étiquettes, dérive ou modèle trop ancien
+  retrainer:
+    image: fraud-rdc/ml-jobs:dev
+    container_name: nuru_retrainer
+    command: ["python", "-m", "ml.retraining.scheduler"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      PROMETHEUS_URL: http://prometheus:9090
+      RETRAIN_CHECK_INTERVAL_S: "600"
+      RETRAIN_NEW_LABELS: "500"
+    volumes:
+      - ./ml/artifacts:/srv/ml/artifacts          # écrit le nouveau champion
+      - ./ml/data:/srv/ml/data:ro                 # historique d'entraînement
+    depends_on:
+      backoffice-api:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: nuru_redis_exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: nuru_postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-nuru_admin}:${POSTGRES_PASSWORD:-nuru_secure_password_2026}@postgres:5432/${POSTGRES_DB:-fraud_detection_db}?sslmode=disable
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: nuru_prometheus
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  # Tableaux de bord techniques : http://localhost:3001
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: nuru_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-ChangeMoi-Grafana}
+      GF_USERS_DEFAULT_LANGUAGE: fr-FR
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/sante-systeme.json
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  # Journaux centralisés : Promtail lit les conteneurs, Loki stocke, Grafana interroge
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: nuru_loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: nuru_promtail
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    volumes:
+      - ./infra/monitoring/loki/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
   # Boîte mail locale : les e-mails d'alerte s'affichent sur http://localhost:8025
   mailpit:
     image: axllent/mailpit:v1.20
@@ -216,3 +320,6 @@ volumes:
   postgres_data:
   redis_data:
   redpanda_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:

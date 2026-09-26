@@ -217,13 +217,15 @@ class BehavioralFeatureExtractor:
             f["hour_deviation_user"] = 0.0
         f["is_weekend"] = float(tx["weekday"] >= 5)
         f["is_month_end"] = float(tx["day"] >= 25 or tx["day"] <= 3)
-        f["log_history_days"] = math.log1p((ts - st.first_ts) / DAY) if st.first_ts is not None else 0.0
+        f["log_history_days"] = math.log1p(max(ts - st.first_ts, 0.0) / DAY) if st.first_ts is not None else 0.0
         f["log_user_tx_count"] = math.log1p(st.n)
 
         # --- trans-canal : recharge de carte suivie d'un achat
         f["is_card"] = float(tx["channel"] == "VISA_VIRTUAL")
         if tx_type == "CARD_PURCHASE" and st.last_topup_ts is not None:
-            f["log_mins_since_topup"] = math.log1p((ts - st.last_topup_ts) / 60)
+            # max(.., 0) : en production une transaction peut arriver en retard (reprise,
+            # horloges d'opérateurs décalées) ; à l'entraînement (ordre chronologique) c'est neutre
+            f["log_mins_since_topup"] = math.log1p(max(ts - st.last_topup_ts, 0.0) / 60)
             f["purchase_to_topup_ratio"] = min(amt / (st.last_topup_amt + 1.0), 5.0)
         else:
             f["log_mins_since_topup"] = math.log1p(NO_HISTORY_GAP_S / 60)
@@ -231,7 +233,7 @@ class BehavioralFeatureExtractor:
 
         # --- profil KYC (données connues de l'opérateur)
         f["kyc_level"] = float(prof["kyc_level"])
-        f["log_account_age_days"] = math.log1p(prof["account_age_days"] + (ts - self.period_start_s) / DAY)
+        f["log_account_age_days"] = math.log1p(max(prof["account_age_days"] + (ts - self.period_start_s) / DAY, 0.0))
         f["log_monthly_income"] = math.log1p(prof["monthly_income_usd"])
         f["has_visa_virtual"] = float(prof["has_visa_virtual"])
 

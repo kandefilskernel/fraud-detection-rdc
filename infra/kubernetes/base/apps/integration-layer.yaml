@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata: { name: integration-layer, labels: { app: integration-layer } }
+spec:
+  selector: { app: integration-layer }
+  ports: [{ name: http, port: 8002 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: integration-layer, labels: { app: integration-layer, tier: app } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: integration-layer } }
+  template:
+    metadata:
+      labels: { app: integration-layer, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "8002" }
+    spec:
+      containers:
+        - name: integration
+          image: fraud-rdc/integration-layer
+          ports: [{ containerPort: 8002, name: http }]
+          envFrom: [{ configMapRef: { name: app-config } }]
+          env:
+            - { name: SCORING_API_KEY, valueFrom: { secretKeyRef: { name: app-secrets, key: SCORING_API_KEY } } }
+            - { name: OPERATOR_API_KEYS, valueFrom: { secretKeyRef: { name: app-secrets, key: OPERATOR_API_KEYS } } }
+          readinessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /health, port: http }, periodSeconds: 15 }
+          resources:
+            requests: { cpu: 250m, memory: 192Mi }
+            limits: { cpu: "1", memory: 512Mi }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: integration-layer }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: integration-layer }
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }

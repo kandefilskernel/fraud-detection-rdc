@@ -1,0 +1,71 @@
+# Consommateurs Kafka. Le persister et l'alerter se répartissent les partitions ;
+# l'auditor reste à 1 réplica (écrivain unique de la chaîne de hachage).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-persister, labels: { app: worker-persister, tier: app } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: worker-persister } }
+  template:
+    metadata:
+      labels: { app: worker-persister, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9100" }
+    spec:
+      containers:
+        - name: persister
+          image: fraud-rdc/workers
+          command: ["python", "-m", "workers.persister"]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+          ports: [{ containerPort: 9100, name: metrics }]
+          livenessProbe: { tcpSocket: { port: metrics }, periodSeconds: 20, initialDelaySeconds: 20 }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-alerter, labels: { app: worker-alerter, tier: app } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: worker-alerter } }
+  template:
+    metadata:
+      labels: { app: worker-alerter, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9100" }
+    spec:
+      containers:
+        - name: alerter
+          image: fraud-rdc/workers
+          command: ["python", "-m", "workers.alerter"]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+          ports: [{ containerPort: 9100, name: metrics }]
+          livenessProbe: { tcpSocket: { port: metrics }, periodSeconds: 20, initialDelaySeconds: 20 }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: worker-auditor, labels: { app: worker-auditor, tier: app } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: worker-auditor } }
+  template:
+    metadata:
+      labels: { app: worker-auditor, tier: app }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9100" }
+    spec:
+      containers:
+        - name: auditor
+          image: fraud-rdc/workers
+          command: ["python", "-m", "workers.auditor"]
+          envFrom: [{ configMapRef: { name: app-config } }, { secretRef: { name: app-secrets } }]
+          ports: [{ containerPort: 9100, name: metrics }]
+          livenessProbe: { tcpSocket: { port: metrics }, periodSeconds: 20, initialDelaySeconds: 20 }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }

@@ -17,16 +17,19 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import Counter, Histogram
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from shared.utils.metrics import metrics_response
 from app.adapters.airtel_adapter import AirtelAdapter
 from app.adapters.base_adapter import AdapterError
 from app.adapters.orange_adapter import OrangeAdapter
 from app.adapters.vodacom_adapter import VodacomAdapter
 from app.adapters.visa_virtual_adapter import VisaVirtualAdapter
+from shared.logging.logger_config import configure_logging
+
+configure_logging("integration-layer")
 
 
 class Settings(BaseSettings):
@@ -111,4 +114,4 @@ async def health():
 
 @app.get("/metrics")
 def metrics():
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return metrics_response()
