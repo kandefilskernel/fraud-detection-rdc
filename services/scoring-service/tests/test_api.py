@@ -49,8 +49,12 @@ def test_score_returns_decision_and_explanation(client):
     d = r.json()
     assert 0.0 <= d["fraud_probability"] <= 1.0
     assert d["action"] in ("APPROVE", "VERIFY", "BLOCK")
-    assert set(d["explanation"]["branch_scores"]) == {"xgboost", "lstm_attention", "autoencoder"}
-    assert len(d["features"]) == 58 and d["known_user"] is True
+    # branches du modèle en production (metadata.json -> branch_order)
+    branches = json.loads((ROOT / "ml" / "artifacts" / "metadata.json").read_text(encoding="utf-8"))["branch_order"]
+    assert set(d["explanation"]["branch_scores"]) == set(branches)
+    assert d["explanation"]["attribution"]
+    from ml.features.feature_engineering import FEATURE_NAMES
+    assert len(d["features"]) == len(FEATURE_NAMES) and d["known_user"] is True
 
 
 def test_profile_is_updated_between_calls(client):
@@ -80,3 +84,74 @@ def test_invalid_transaction_is_rejected(client):
 def test_health_and_metrics(client):
     assert client.get("/health").json()["redis"] is True
     assert "scoring_latency_seconds" in client.get("/metrics").text
+
+
+# ---------------------------------------------------------------------- idempotence
+def tx_count_in_profile() -> int:
+    return json.loads(FAKE.get("fs:user:U1"))["n"]
+
+
+def test_resent_transaction_returns_same_decision_without_recounting(client):
+    """Renvoi après coupure réseau : même décision, profil du client NON modifié."""
+    h = {"X-API-Key": "test-key"}
+    first = client.post("/v1/score", json=tx(10), headers=h).json()
+    n_after_first = tx_count_in_profile()
+    again = client.post("/v1/score", json=tx(10), headers=h)
+    assert again.status_code == 200
+    d = again.json()
+    assert d["idempotent_replay"] is True and first["idempotent_replay"] is False
+    assert d["fraud_probability"] == first["fraud_probability"] and d["action"] == first["action"]
+    assert tx_count_in_profile() == n_after_first
+    assert "scoring_idempotent_replays_total" in client.get("/metrics").text
+
+
+def test_same_id_with_different_content_is_refused(client):
+    h = {"X-API-Key": "test-key"}
+    client.post("/v1/score", json=tx(11), headers=h)
+    r = client.post("/v1/score", json=tx(11, amount=999.0, amount_usd=999.0), headers=h)
+    assert r.status_code == 409
+
+
+# ---------------------------------------------------------------------- réputation
+def test_confirmed_fraud_marks_its_device_for_next_transactions(client):
+    h = {"X-API-Key": "test-key"}
+    before = client.post("/v1/score", json=tx(20, device_id="DEV-FRAUDE"), headers=h).json()
+    assert before["features"]["rep_device_frauds"] == 0.0
+    r = client.post("/v1/reputation/report", headers=h, json={
+        "transaction_id": "T20", "tx_time": "2025-11-01T10:20:00", "tx_type": "P2P_SEND", "user_id": "U1",
+        "device_id": "DEV-FRAUDE", "counterparty_id": "243820000001"})
+    assert r.status_code == 200 and r.json()["entities_updated"] == 3   # appareil, portefeuille, compte
+    after = client.post("/v1/score", json=tx(21, device_id="DEV-FRAUDE"), headers=h).json()
+    assert after["features"]["rep_device_frauds"] > 0 and after["features"]["rep_cp_frauds"] > 0
+
+
+# ---------------------------------------------------------------------- signal télécom
+def test_recent_sim_swap_forces_out_of_band_verification(client):
+    d = client.post("/v1/score", json=tx(12, sim_swap_at="2025-11-01T09:00:00"),   # SIM changée 3 h avant
+                    headers={"X-API-Key": "test-key"}).json()
+    assert "SIM_RECENTE_OPERATION_SORTANTE" in d["rules_triggered"]
+    assert d["action"] in ("VERIFY", "BLOCK")
+    if d["action"] == "VERIFY":
+        assert d["verification_method"] == "HORS_SIM"   # un OTP par SMS arriverait chez le fraudeur
+
+
+# ---------------------------------------------------------------------- signalements SMS (NLP)
+def scam_report(report_id, numbers, sender_is_number=True, text=None):
+    return {"report_id": report_id, "received_at": "2025-11-01T09:00:00", "sender_is_number": sender_is_number,
+            "numbers": numbers, "masked_text": text or ("Bonjour, je vous ai envoyé 50 000 FC par erreur, c'était pour "
+                                                         "ma mère malade. Svp renvoyez au <NUMERO>. Dieu vous bénisse")}
+
+
+def test_scam_sms_report_flags_number_then_rule_fires(client):
+    h = {"X-API-Key": "test-key"}
+    r = client.post("/v1/scam-reports", json=scam_report("R1", ["243899990001"]), headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["is_scam"] and r.json()["flagged_numbers"] == ["243899990001"]
+    d = client.post("/v1/score", json=tx(40, counterparty_id="243899990001"), headers=h).json()
+    assert "BENEFICIAIRE_SIGNALE_PAR_SMS" in d["rules_triggered"] and d["action"] in ("VERIFY", "BLOCK")
+
+
+def test_operator_sender_never_flags_a_number(client):
+    r = client.post("/v1/scam-reports", headers={"X-API-Key": "test-key"},
+                    json=scam_report("R2", ["243899990002"], sender_is_number=False))
+    assert r.status_code == 200 and r.json()["flagged_numbers"] == []

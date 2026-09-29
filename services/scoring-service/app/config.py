@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # Séparées par des virgules ; à remplacer en production (secret Kubernetes).
     SCORING_API_KEYS: str = "dev-scoring-key"
     EXPLAIN_TOP_K: int = 6
+    # Idempotence : durée de conservation des décisions (renvois d'opérateurs)
+    IDEMPOTENCY_TTL_S: int = 48 * 3600
 
 
 settings = Settings()

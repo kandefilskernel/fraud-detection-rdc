@@ -12,6 +12,7 @@ class Explanation(BaseModel):
     branch_scores: dict[str, float]
     branch_contributions: dict[str, float]
     attention_on_history: list[float]
+    attribution: str = "TreeSHAP (XGBoost)"   # méthode des contributions par variable
 
 
 class ScoreResponse(BaseModel):
@@ -24,6 +25,7 @@ class ScoreResponse(BaseModel):
     reason: str
     expected_costs_usd: dict[str, float]
     rules_triggered: list[str]
+    verification_method: str | None = None   # PIN_USSD | 3DS | HORS_SIM (si action = VERIFY)
     known_user: bool
     explanation: Explanation
     degraded: bool
@@ -31,3 +33,6 @@ class ScoreResponse(BaseModel):
     model_version: str
     latency_ms: float
     features: dict[str, float]
+    # True : transaction déjà reçue (renvoi après coupure réseau) ; décision d'origine
+    # renvoyée telle quelle, profil du client NON modifié une seconde fois
+    idempotent_replay: bool = False

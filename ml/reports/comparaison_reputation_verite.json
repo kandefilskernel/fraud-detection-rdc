@@ -1,0 +1,145 @@
+{
+  "model": "hybrid",
+  "labels_used": "is_fraud_true",
+  "n_test": 57796,
+  "n_boot": 1000,
+  "metrics": {
+    "pr_auc_global": {
+      "a": 0.9087,
+      "b": 0.9365,
+      "delta": 0.0279,
+      "ci95": [
+        0.0144,
+        0.0431
+      ],
+      "significant": true
+    },
+    "pr_auc_MOBILE_MONEY": {
+      "a": 0.9291,
+      "b": 0.9666,
+      "delta": 0.0375,
+      "ci95": [
+        0.0272,
+        0.05
+      ],
+      "significant": true
+    },
+    "pr_auc_VISA_VIRTUAL": {
+      "a": 0.8435,
+      "b": 0.7433,
+      "delta": -0.1002,
+      "ci95": [
+        -0.175,
+        -0.0254
+      ],
+      "significant": true
+    },
+    "recall_global": {
+      "a": 0.6183,
+      "b": 0.6292,
+      "delta": 0.0108,
+      "ci95": [
+        -0.0476,
+        0.0727
+      ],
+      "significant": false
+    },
+    "recall_ACCOUNT_TAKEOVER": {
+      "a": 0.6789,
+      "b": 0.7156,
+      "delta": 0.0367,
+      "ci95": [
+        -0.0158,
+        0.0959
+      ],
+      "significant": false,
+      "n_fraud": 109
+    },
+    "recall_AGENT_FRAUD": {
+      "a": 0.474,
+      "b": 0.4913,
+      "delta": 0.0173,
+      "ci95": [
+        -0.0647,
+        0.1
+      ],
+      "significant": false,
+      "n_fraud": 173
+    },
+    "recall_CARD_TESTING": {
+      "a": 0.5312,
+      "b": 0.1094,
+      "delta": -0.4219,
+      "ci95": [
+        -0.8001,
+        -0.1
+      ],
+      "significant": true,
+      "n_fraud": 64
+    },
+    "recall_CNP_FRAUD": {
+      "a": 0.6923,
+      "b": 0.7308,
+      "delta": 0.0385,
+      "ci95": [
+        -0.0938,
+        0.1786
+      ],
+      "significant": false,
+      "n_fraud": 52
+    },
+    "recall_SIM_SWAP": {
+      "a": 0.9895,
+      "b": 0.9948,
+      "delta": 0.0052,
+      "ci95": [
+        -0.0116,
+        0.0238
+      ],
+      "significant": false,
+      "n_fraud": 191
+    },
+    "recall_SMURFING": {
+      "a": 0.6562,
+      "b": 0.5885,
+      "delta": -0.0677,
+      "ci95": [
+        -0.2787,
+        0.1718
+      ],
+      "significant": false,
+      "n_fraud": 192
+    },
+    "recall_SOCIAL_ENGINEERING": {
+      "a": 0.3147,
+      "b": 0.5279,
+      "delta": 0.2132,
+      "ci95": [
+        0.1361,
+        0.2865
+      ],
+      "significant": true,
+      "n_fraud": 197
+    },
+    "recall_TOPUP_DRAIN": {
+      "a": 0.6667,
+      "b": 0.6389,
+      "delta": -0.0278,
+      "ci95": [
+        -0.0952,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 36
+    }
+  },
+  "mcnemar": {
+    "a_right_b_wrong": 111,
+    "a_wrong_b_right": 123,
+    "p_value": 0.4721611035141718
+  },
+  "labels": {
+    "a": "sans rép.",
+    "b": "avec rép."
+  }
+}

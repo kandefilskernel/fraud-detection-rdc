@@ -13,12 +13,19 @@ Usage :
     python scripts/simulate_transactions.py --rate 20            # 20 transactions / seconde
     python scripts/simulate_transactions.py --rate 50 --n 2000
     python scripts/simulate_transactions.py --only-fraud-episodes --rate 5   # démo jury
+    python scripts/simulate_transactions.py --duplicate-rate 0.05  # 5 % de renvois (idempotence)
+    python scripts/simulate_transactions.py --url https://localhost/ingest --mtls-dir infra/nginx/certs
+
+Chaque message est SIGNÉ (HMAC, en-têtes X-Timestamp / X-Signature) comme le ferait le
+système d'un opérateur ; secrets : variable OPERATOR_HMAC_SECRETS (valeurs de dev par défaut).
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
+import os
+import random
 import sys
 import time
 from collections import Counter
@@ -36,11 +43,14 @@ from app.adapters.orange_adapter import OrangeAdapter  # noqa: E402
 from app.adapters.visa_virtual_adapter import VisaVirtualAdapter  # noqa: E402
 from app.adapters.vodacom_adapter import VodacomAdapter  # noqa: E402
 from shared.schemas.unified_transaction import canonical_id  # noqa: E402
+from shared.security.request_signing import parse_secrets, signed_headers  # noqa: E402
 
 ADAPTERS = {"vodacom": VodacomAdapter(), "airtel": AirtelAdapter(), "orange": OrangeAdapter(),
             "visa": VisaVirtualAdapter()}
 KEYS = {"vodacom": "dev-vodacom-key", "airtel": "dev-airtel-key", "orange": "dev-orange-key",
         "visa": "dev-visa-key"}
+HMAC_SECRETS = parse_secrets(os.getenv("OPERATOR_HMAC_SECRETS", "vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,"
+                                                            "orange:dev-orange-hmac,visa:dev-visa-hmac"))
 COLORS = {"APPROVE": "\033[32m", "VERIFY": "\033[33m", "BLOCK": "\033[31m"}
 
 
@@ -71,6 +81,16 @@ def provider_of(r: dict) -> str:
     return "visa" if r["channel"] == "VISA_VIRTUAL" else r["operator"].lower()
 
 
+def signed_request(prov: str, r: dict) -> tuple[str, bytes, dict]:
+    """Chemin, corps et en-têtes d'un message opérateur signé (le chemin signé est /v1/...,
+    sans le préfixe /ingest de la passerelle)."""
+    path = f"/v1/transactions/{prov}"
+    body = json.dumps(ADAPTERS[prov].from_unified(r), default=str).encode()
+    headers = {"X-API-Key": KEYS[prov], "Content-Type": "application/json",
+               **signed_headers(HMAC_SECRETS[prov], "POST", path, body)}
+    return path, body, headers
+
+
 async def main():
     p = argparse.ArgumentParser()
     p.add_argument("--url", default="http://localhost:8002")
@@ -79,20 +99,33 @@ async def main():
     p.add_argument("--skip", type=int, default=0)
     p.add_argument("--only-fraud-episodes", action="store_true")
     p.add_argument("--quiet", action="store_true")
+    p.add_argument("--duplicate-rate", type=float, default=0.0,
+                   help="part des transactions renvoyées une 2e fois (coupure réseau simulée)")
+    p.add_argument("--mtls-dir", default=None,
+                   help="dossier des certificats clients (<opérateur>.crt/.key + operators-ca.crt)")
     a = p.parse_args()
 
     rows = load(a.n, a.skip, a.only_fraud_episodes)
     print(f"{len(rows)} transactions à rejouer à {a.rate}/s vers {a.url}\n")
     stats, lat, tp, fn, fp = Counter(), [], 0, 0, 0
     sem = asyncio.Semaphore(64)
-    async with httpx.AsyncClient(base_url=a.url, timeout=5) as client:
+    if a.mtls_dir:   # un client HTTP par opérateur : chacun présente SON certificat
+        d = Path(a.mtls_dir)
+        clients = {prov: httpx.AsyncClient(base_url=a.url, timeout=5, verify=str(d / "operators-ca.crt"),
+                                           cert=(str(d / f"{prov}.crt"), str(d / f"{prov}.key")))
+                   for prov in ADAPTERS}
+    else:
+        shared_client = httpx.AsyncClient(base_url=a.url, timeout=5)
+        clients = {prov: shared_client for prov in ADAPTERS}
+    rng = random.Random(0)
+    try:
         async def send(r):
             nonlocal tp, fn, fp
             prov = provider_of(r)
+            path, body, headers = signed_request(prov, r)
             async with sem:
                 try:
-                    resp = await client.post(f"/v1/transactions/{prov}", json=ADAPTERS[prov].from_unified(r),
-                                             headers={"X-API-Key": KEYS[prov]})
+                    resp = await clients[prov].post(path, content=body, headers=headers)
                     try:
                         d = resp.json()
                     except ValueError:
@@ -104,6 +137,11 @@ async def main():
             if resp.status_code != 200:
                 stats["erreur"] += 1
                 print(f"erreur HTTP {resp.status_code} sur {r['transaction_id']} : {d}")
+                return
+            if d.get("idempotent_replay"):
+                # 2e exemplaire d'une transaction (renvoi ou original arrivé après son renvoi) :
+                # décision d'origine renvoyée, profil du client non recompté
+                stats["renvoi_deja_score"] += 1
                 return
             action = d["action"]
             stats[action] += 1
@@ -128,8 +166,13 @@ async def main():
             if delay > 0:
                 await asyncio.sleep(delay)
             tasks.append(asyncio.create_task(send(r)))
+            if a.duplicate_rate and rng.random() < a.duplicate_rate:
+                tasks.append(asyncio.create_task(send(r)))
         await asyncio.gather(*tasks)
         dt = time.perf_counter() - t0
+    finally:
+        for c in set(clients.values()):
+            await c.aclose()
 
     lat_s = sorted(lat)
     pct = lambda q: lat_s[min(len(lat_s) - 1, int(q * len(lat_s)))] if lat_s else 0  # noqa: E731

@@ -22,6 +22,7 @@ COPY ml/__init__.py ml/__init__.py
 COPY ml/features/ ml/features/
 COPY ml/models/ ml/models/
 COPY ml/serving/ ml/serving/
+COPY ml/nlp/ ml/nlp/
 COPY ml/artifacts/ ml/artifacts/
 COPY services/scoring-service/app/ app/
 USER app

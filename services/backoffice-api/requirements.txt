@@ -12,3 +12,5 @@ python-multipart==0.0.9
 confluent-kafka==2.3.0
 prometheus-client==0.20.0
 prometheus-fastapi-instrumentator==7.0.0
+numpy==1.26.4
+anthropic==1.8.0

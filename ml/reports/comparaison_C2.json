@@ -1,0 +1,207 @@
+{
+  "model": "hybrid",
+  "n_test": 55822,
+  "n_boot": 1000,
+  "metrics": {
+    "pr_auc_global": {
+      "a": 0.8686,
+      "b": 0.873,
+      "delta": 0.0044,
+      "ci95": [
+        -0.0036,
+        0.0124
+      ],
+      "significant": false
+    },
+    "pr_auc_MOBILE_MONEY": {
+      "a": 0.8864,
+      "b": 0.89,
+      "delta": 0.0035,
+      "ci95": [
+        -0.0033,
+        0.0098
+      ],
+      "significant": false
+    },
+    "pr_auc_VISA_VIRTUAL": {
+      "a": 0.7911,
+      "b": 0.7899,
+      "delta": -0.0012,
+      "ci95": [
+        -0.0362,
+        0.0297
+      ],
+      "significant": false
+    },
+    "pr_auc_carte_20+_tx": {
+      "a": 0.7766,
+      "b": 0.7813,
+      "delta": 0.0047,
+      "ci95": [
+        -0.0276,
+        0.0378
+      ],
+      "significant": false
+    },
+    "pr_auc_carte_5-19_tx": {
+      "a": 0.9568,
+      "b": 0.8948,
+      "delta": -0.062,
+      "ci95": [
+        -0.1974,
+        0.0
+      ],
+      "significant": false
+    },
+    "recall_carte_0-4_tx": {
+      "a": NaN,
+      "b": NaN,
+      "delta": NaN,
+      "ci95": [
+        NaN,
+        NaN
+      ],
+      "significant": false
+    },
+    "recall_carte_20+_tx": {
+      "a": 0.7686,
+      "b": 0.7521,
+      "delta": -0.0165,
+      "ci95": [
+        -0.0596,
+        0.025
+      ],
+      "significant": false,
+      "n_fraud": 121
+    },
+    "recall_carte_5-19_tx": {
+      "a": 0.8667,
+      "b": 0.7333,
+      "delta": -0.1333,
+      "ci95": [
+        -0.2727,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 15
+    },
+    "recall_global": {
+      "a": 0.7896,
+      "b": 0.8069,
+      "delta": 0.0173,
+      "ci95": [
+        0.0024,
+        0.0329
+      ],
+      "significant": true
+    },
+    "recall_ACCOUNT_TAKEOVER": {
+      "a": 0.81,
+      "b": 0.85,
+      "delta": 0.04,
+      "ci95": [
+        0.0,
+        0.1111
+      ],
+      "significant": false,
+      "n_fraud": 100
+    },
+    "recall_AGENT_FRAUD": {
+      "a": 0.9091,
+      "b": 0.9091,
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 88
+    },
+    "recall_CARD_TESTING": {
+      "a": 1.0,
+      "b": 0.9778,
+      "delta": -0.0222,
+      "ci95": [
+        -0.059,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 45
+    },
+    "recall_CNP_FRAUD": {
+      "a": 0.7727,
+      "b": 0.7273,
+      "delta": -0.0455,
+      "ci95": [
+        -0.127,
+        0.0345
+      ],
+      "significant": false,
+      "n_fraud": 66
+    },
+    "recall_FRIENDLY_FRAUD": {
+      "a": 0.0,
+      "b": 0.0,
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 7
+    },
+    "recall_SIM_SWAP": {
+      "a": 0.8768,
+      "b": 0.9261,
+      "delta": 0.0493,
+      "ci95": [
+        0.0209,
+        0.0842
+      ],
+      "significant": true,
+      "n_fraud": 203
+    },
+    "recall_SMURFING": {
+      "a": 0.8413,
+      "b": 0.8651,
+      "delta": 0.0238,
+      "ci95": [
+        -0.0152,
+        0.069
+      ],
+      "significant": false,
+      "n_fraud": 126
+    },
+    "recall_SOCIAL_ENGINEERING": {
+      "a": 0.5613,
+      "b": 0.5677,
+      "delta": 0.0065,
+      "ci95": [
+        -0.0331,
+        0.0455
+      ],
+      "significant": false,
+      "n_fraud": 155
+    },
+    "recall_TOPUP_DRAIN": {
+      "a": 0.5556,
+      "b": 0.5556,
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "significant": false,
+      "n_fraud": 18
+    }
+  },
+  "mcnemar": {
+    "a_right_b_wrong": 21,
+    "a_wrong_b_right": 38,
+    "p_value": 0.036343179957053884
+  },
+  "labels": {
+    "a": "silo",
+    "b": "unifié"
+  }
+}

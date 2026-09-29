@@ -41,6 +41,22 @@ HOME_COUNTRY = "CD"
 
 HOUR, DAY, WEEK = 3600.0, 86400.0, 7 * 86400.0
 NO_HISTORY_GAP_S = 30 * DAY  # valeur par défaut « jamais vu » pour les délais
+INFLOW_WINDOW_S = 2 * DAY    # réceptions gardées dans le profil du titulaire
+WALLET_WINDOW_S = WEEK       # fenêtre du profil d'un portefeuille contrepartie
+WALLET_MAX_EVENTS = 300      # borne mémoire par portefeuille (identique en production, Redis)
+P2P_TYPES = ("P2P_SEND", "P2P_RECEIVE")
+ID_COLUMNS = ("user_id", "device_id", "counterparty_id", "agent_id", "merchant_id")
+
+
+def canon_id(v) -> str | None:
+    """Identifiant en texte canonique (même règle que shared.schemas.canonical_id) : pandas lit
+    les numéros de portefeuille tantôt en texte, tantôt en flottant (243917538864.0) selon les
+    blocs du CSV ; sans cette normalisation, un même portefeuille compterait pour deux."""
+    if v is None or (isinstance(v, float) and v != v):
+        return None
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
 
 FEATURE_GROUPS = {
     "amount": ["log_amount_usd", "amount_zscore_user", "amount_ratio_user_mean",
@@ -59,10 +75,27 @@ FEATURE_GROUPS = {
     "cross_channel": ["is_card", "log_mins_since_topup", "purchase_to_topup_ratio"],
     "kyc_profile": ["kyc_level", "log_account_age_days", "log_monthly_income", "has_visa_virtual"],
     "tx_type": [f"type_{t}" for t in TX_TYPES],
+    # C1 — profilage bidirectionnel : la contrepartie (destinataire d'un envoi, expéditeur
+    # d'une réception) et le titulaire EN TANT QUE destinataire, sur tous les opérateurs.
+    "recipient_network": ["cp_is_customer", "cp_log_age_days", "cp_in_senders_7d", "cp_in_new_ratio_7d",
+                          "cp_in_operators_7d", "cp_out_receivers_7d", "cp_log_in_amount_7d",
+                          "refund_ratio_to_cp", "log_mins_since_received_from_cp",
+                          "in_senders_24h", "in_new_senders_24h", "log_inflow_24h", "passthrough_ratio"],
+    # Profil de réputation : entités (appareil, portefeuille, agent, marchand, compte) déjà
+    # impliquées dans des fraudes SIGNALÉES avant la transaction (délai de signalement respecté)
+    "reputation": ["rep_device_frauds", "rep_cp_frauds", "rep_agent_frauds_7d", "rep_merchant_frauds_30d",
+                   "rep_user_frauds_30d"],
 }
+REPUTATION_KINDS = ("dev", "cp", "agent", "merchant", "user")
+MONTH = 30 * DAY
 FEATURE_NAMES = [f for group in FEATURE_GROUPS.values() for f in group]
 META_COLUMNS = ["transaction_id", "timestamp", "user_id", "channel", "tx_type", "amount_usd",
                 "is_fraud", "fraud_type"]
+# Champs d'une transaction lus par l'extracteur (rejeu hors ligne, amorçage, production)
+EXTRACTOR_COLUMNS = ["user_id", "operator", "tx_type", "channel", "amount_usd", "balance_before_usd",
+                     "status", "device_id", "device_type", "access_channel", "ip_country",
+                     "location_province", "counterparty_id", "agent_id", "merchant_id",
+                     "merchant_category", "merchant_country"]
 
 
 @dataclass
@@ -85,6 +118,20 @@ class _UserState:
     hour_cos_sum: float = 0.0
     last_topup_ts: float | None = None
     last_topup_amt: float = 0.0
+    inflows: deque = field(default_factory=deque)      # (ts, portefeuille, montant, 1er contact) sur 48 h
+
+
+def _wallet_events() -> deque:
+    return deque(maxlen=WALLET_MAX_EVENTS)
+
+
+@dataclass
+class _WalletState:
+    """Profil d'un portefeuille vu comme contrepartie (client ou portefeuille d'un autre
+    réseau), alimenté par les transactions de TOUS les titulaires et de tous les opérateurs."""
+    first_seen: float | None = None
+    inflows: deque = field(default_factory=_wallet_events)   # (ts, expéditeur, montant, 1er contact, opérateur)
+    outflows: deque = field(default_factory=_wallet_events)  # (ts, bénéficiaire, montant)
 
 
 class BehavioralFeatureExtractor:
@@ -93,6 +140,7 @@ class BehavioralFeatureExtractor:
 
     def __init__(self, users: pd.DataFrame, period_start: pd.Timestamp):
         self.period_start_s = period_start.timestamp()
+        users = users.assign(user_id=users["user_id"].map(canon_id))
         self.profiles = users.set_index("user_id")[
             ["province", "kyc_level", "kyc_tx_limit_usd", "account_age_days",
              "monthly_income_usd", "has_visa_virtual"]].to_dict("index")
@@ -102,11 +150,35 @@ class BehavioralFeatureExtractor:
         # reçoit de (ou alimente) nombreux comptes est typique d'un réseau de mules
         self.counterparty_users: dict[str, set] = {}
         self.agent_recent: dict[str, deque] = {}        # agent -> (ts, user) sur 24 h
+        # C1 : portefeuille -> titulaire (clients KYC connus) et profil de chaque portefeuille
+        self.wallet_owner: dict[str, str] = (
+            {canon_id(w): canon_id(u) for w, u in zip(users["wallet_id"], users["user_id"])}
+            if "wallet_id" in users.columns else {})
+        self.wallets: dict[str, _WalletState] = {}
+        # réputation : type d'entité -> identifiant -> {transaction frauduleuse signalée : son horodatage}
+        self.reputation: dict[str, dict[str, dict[str, float]]] = {k: {} for k in REPUTATION_KINDS}
 
     def process(self, tx: dict) -> dict:
         feats = self.extract(tx)
         self.update(tx)
         return feats
+
+    @staticmethod
+    def report_entities(event: dict) -> list[tuple[str, str]]:
+        """Entités marquées par une fraude signalée : l'appareil utilisé, le portefeuille
+        contrepartie (P2P), l'agent, le marchand et le compte concerné (victime compromise ou
+        compte mule : dans les deux cas un compte « chaud »)."""
+        cp = event.get("counterparty_id") if event.get("tx_type") in P2P_TYPES else None
+        pairs = [("dev", event.get("device_id")), ("cp", cp), ("agent", event.get("agent_id")),
+                 ("merchant", event.get("merchant_id")), ("user", event.get("user_id"))]
+        return [(k, v) for k, v in pairs if isinstance(v, str) and v]
+
+    def report(self, event: dict) -> None:
+        """Intègre une fraude SIGNALÉE (plainte, enquête, contestation) au profil de réputation.
+        event : transaction_id, ts (horodatage de la transaction frauduleuse) et ses entités.
+        Un même signalement reçu deux fois ne compte qu'une fois."""
+        for kind, key in self.report_entities(event):
+            self.reputation[kind].setdefault(key, {})[event["transaction_id"]] = float(event["ts"])
 
     # ------------------------------------------------------------------ extraction
     def extract(self, tx: dict) -> dict:
@@ -239,6 +311,90 @@ class BehavioralFeatureExtractor:
 
         for t in TX_TYPES:
             f[f"type_{t}"] = float(tx_type == t)
+
+        f.update(self._recipient_network_features(st, uid, ts, cp, amt, tx_type, is_debit))
+        f.update(self._reputation_features(uid, ts, dev, cp, agent, merch))
+        return f
+
+    # ------------------------------------------------------------------ réputation
+    def _reputation_features(self, uid, ts, dev, cp, agent, merch) -> dict:
+        rep = self.reputation
+
+        def count(kind, key, window=None) -> float:
+            times = rep[kind].get(key) if key is not None else None
+            if not times:
+                return 0.0
+            n = len(times) if window is None else sum(1 for t in times.values() if ts - t <= window)
+            return math.log1p(n)
+
+        return {
+            "rep_device_frauds": count("dev", dev),
+            "rep_cp_frauds": count("cp", cp),
+            "rep_agent_frauds_7d": count("agent", agent, WEEK),
+            "rep_merchant_frauds_30d": count("merchant", merch, MONTH),
+            "rep_user_frauds_30d": count("user", uid, MONTH),
+        }
+
+    # ------------------------------------------------------------------ C1 : réseau
+    def _recipient_network_features(self, st: _UserState, uid: str, ts: float, cp: str | None,
+                                    amt: float, tx_type: str, is_debit: bool) -> dict:
+        f: dict[str, float] = {}
+
+        # (a) la contrepartie : son ancienneté et ce que les AUTRES clients font avec elle
+        ws = self.wallets.get(cp) if cp is not None else None
+        owner = self.wallet_owner.get(cp) if cp is not None else None
+        if owner is not None and owner in self.profiles:
+            age = self.profiles[owner]["account_age_days"] + (ts - self.period_start_s) / DAY
+        elif ws is not None and ws.first_seen is not None:
+            age = (ts - ws.first_seen) / DAY   # portefeuille d'un autre réseau : vu depuis...
+        else:
+            age = 0.0                          # jamais vu
+        senders, operators, n_in, n_new, amt_in = set(), set(), 0, 0, 0.0
+        receivers = set()
+        if ws is not None:
+            for t, u, a, first, op in ws.inflows:
+                if ts - t <= WALLET_WINDOW_S and u != uid:
+                    n_in += 1
+                    n_new += first
+                    amt_in += a
+                    senders.add(u)
+                    if op:
+                        operators.add(op)
+            receivers = {u for t, u, a in ws.outflows if ts - t <= WALLET_WINDOW_S and u != uid}
+        f["cp_is_customer"] = float(owner is not None)
+        f["cp_log_age_days"] = math.log1p(max(age, 0.0))
+        f["cp_in_senders_7d"] = math.log1p(len(senders))
+        f["cp_in_new_ratio_7d"] = (n_new + 1) / (n_in + 2)   # lissé : 0,5 sans historique
+        f["cp_in_operators_7d"] = float(len(operators))
+        f["cp_out_receivers_7d"] = math.log1p(len(receivers))
+        f["cp_log_in_amount_7d"] = math.log1p(amt_in)
+
+        # (b) arnaque « envoi par erreur » : je renvoie PLUS que ce que cette personne
+        # vient de m'envoyer
+        last_from_cp = None
+        if tx_type == "P2P_SEND" and cp is not None:
+            for t, c, a, _ in st.inflows:
+                if c == cp and ts - t <= INFLOW_WINDOW_S:
+                    last_from_cp = (t, a)
+        if last_from_cp is not None:
+            f["refund_ratio_to_cp"] = math.log1p(min(amt / (last_from_cp[1] + 0.01), 100.0))
+            f["log_mins_since_received_from_cp"] = math.log1p(max(ts - last_from_cp[0], 0.0) / 60)
+        else:
+            f["refund_ratio_to_cp"] = 0.0
+            f["log_mins_since_received_from_cp"] = math.log1p(NO_HISTORY_GAP_S / 60)
+
+        # (c) le titulaire EN TANT QUE destinataire : argent reçu d'inconnus puis ressorti
+        senders24, new24, inflow24 = set(), set(), 0.0
+        for t, c, a, first in st.inflows:
+            if ts - t <= DAY:
+                senders24.add(c)
+                inflow24 += a
+                if first:
+                    new24.add(c)
+        f["in_senders_24h"] = math.log1p(len(senders24))
+        f["in_new_senders_24h"] = math.log1p(len(new24))
+        f["log_inflow_24h"] = math.log1p(inflow24)
+        f["passthrough_ratio"] = min(amt, inflow24) / amt if is_debit and amt > 0 else 0.0
         return f
 
     # ------------------------------------------------------------------ mise à jour
@@ -270,9 +426,25 @@ class BehavioralFeatureExtractor:
         st.devices[dev] = st.devices.get(dev, 0) + 1
         self.device_users.setdefault(dev, set()).add(uid)
         st.provinces.add(tx["location_province"])
-        if tx_type in ("P2P_SEND", "P2P_RECEIVE"):
-            st.counterparties.add(tx["counterparty_id"])
-            self.counterparty_users.setdefault(tx["counterparty_id"], set()).add(uid)
+        if tx_type in P2P_TYPES and tx["counterparty_id"] is not None:
+            cp = tx["counterparty_id"]
+            first_contact = cp not in st.counterparties   # évalué AVANT l'ajout
+            st.counterparties.add(cp)
+            self.counterparty_users.setdefault(cp, set()).add(uid)
+            # C1 : profil du portefeuille contrepartie et réceptions du titulaire
+            ws = self.wallets.setdefault(cp, _WalletState())
+            if ws.first_seen is None:
+                ws.first_seen = ts
+            if tx_type == "P2P_SEND":
+                ws.inflows.append((ts, uid, amt, first_contact, tx.get("operator")))
+            else:
+                ws.outflows.append((ts, uid, amt))
+                st.inflows.append((ts, cp, amt, first_contact))
+            for q in (ws.inflows, ws.outflows):
+                while q and ts - q[0][0] > WALLET_WINDOW_S:
+                    q.popleft()
+        while st.inflows and ts - st.inflows[0][0] > INFLOW_WINDOW_S:
+            st.inflows.popleft()
         if isinstance(tx["agent_id"], str):
             st.agents.add(tx["agent_id"])
             q = self.agent_recent.setdefault(tx["agent_id"], deque())
@@ -299,27 +471,83 @@ def _period_start(timestamps: pd.Series, raw_dir: Path) -> pd.Timestamp:
     return pd.to_datetime(timestamps).min().normalize()
 
 
+PROFILE_SCOPES = ("unified", "silo")
+
+
+def reported_seconds(tx: pd.DataFrame) -> np.ndarray | None:
+    """Date de signalement de chaque transaction (secondes, même convention que ts), NaN si
+    la fraude n'est pas (encore) signalée ; None si le jeu de données n'a pas cette colonne."""
+    if "fraud_reported_at" not in tx.columns:
+        return None
+    return ((pd.to_datetime(tx["fraud_reported_at"]) - pd.Timestamp("1970-01-01"))
+            / pd.Timedelta(seconds=1)).to_numpy(dtype=float)
+
+
+def replay_history(records: list[dict], extractor_for, tx_ids, reported_s: np.ndarray | None,
+                   until_s: float | None = None) -> list[dict]:
+    """Rejoue l'historique dans l'ordre du temps : transactions ET signalements de fraude.
+
+    Chaque signalement est intégré à sa DATE DE SIGNALEMENT : une transaction ne voit que les
+    fraudes déjà connues de l'opérateur au moment où elle a lieu (pas de fuite du futur).
+    Utilisé à l'identique pour l'entraînement (build_feature_table) et l'amorçage de Redis.
+    until_s : intègre aussi les signalements reçus après la dernière transaction et avant until_s."""
+    reports = [] if reported_s is None else sorted((s, i) for i, s in enumerate(reported_s) if s == s)
+    rows, j = [], 0
+
+    def apply(i):
+        extractor_for(records[i]).report({**records[i], "transaction_id": str(tx_ids[i])})
+
+    for r in records:
+        # strictement avant : une fraude ne peut pas « voir » son propre signalement
+        while j < len(reports) and reports[j][0] < r["ts"]:
+            apply(reports[j][1])
+            j += 1
+        rows.append(extractor_for(r).process(r))
+    while until_s is not None and j < len(reports) and reports[j][0] < until_s:
+        apply(reports[j][1])
+        j += 1
+    return rows
+
+
 def build_feature_table(tx: pd.DataFrame, users: pd.DataFrame,
-                        period_start: pd.Timestamp | None = None) -> pd.DataFrame:
-    """Rejoue l'historique chronologiquement et renvoie META_COLUMNS + FEATURE_NAMES."""
+                        period_start: pd.Timestamp | None = None,
+                        profile_scope: str = "unified") -> pd.DataFrame:
+    """Rejoue l'historique chronologiquement et renvoie META_COLUMNS + FEATURE_NAMES.
+
+    profile_scope (expérience C2) :
+        "unified" : un seul profil par titulaire, alimenté par le portefeuille ET la carte
+                    (ce que fait la plateforme en production) ;
+        "silo"    : un extracteur indépendant par canal, comme deux institutions qui ne
+                    partagent pas leurs données (l'émetteur de la carte ne voit que la carte).
+    """
+    if profile_scope not in PROFILE_SCOPES:
+        raise ValueError(f"profile_scope doit valoir {PROFILE_SCOPES}")
     tx = tx.copy()
     tx["timestamp"] = pd.to_datetime(tx["timestamp"])
     tx = tx.sort_values(["timestamp", "transaction_id"], kind="mergesort").reset_index(drop=True)
     if period_start is None:
         period_start = tx["timestamp"].min().normalize()
 
-    work = tx[["user_id", "tx_type", "channel", "amount_usd", "balance_before_usd", "status",
-               "device_id", "device_type", "access_channel", "ip_country", "location_province",
-               "counterparty_id", "agent_id", "merchant_id", "merchant_category",
-               "merchant_country"]].copy()
+    work = tx[[c for c in EXTRACTOR_COLUMNS if c in tx.columns]].copy()
     work = work.astype(object).where(work.notna(), None)
+    for col in ID_COLUMNS:
+        work[col] = work[col].map(canon_id)
+    if "operator" not in work.columns:
+        work["operator"] = None
     work["ts"] = (tx["timestamp"] - pd.Timestamp("1970-01-01")) / pd.Timedelta(seconds=1)
     work["hour"] = tx["timestamp"].dt.hour
     work["weekday"] = tx["timestamp"].dt.weekday
     work["day"] = tx["timestamp"].dt.day
 
-    extractor = BehavioralFeatureExtractor(users, period_start)
-    rows = [extractor.process(r) for r in work.to_dict("records")]
+    if profile_scope == "unified":
+        single = BehavioralFeatureExtractor(users, period_start)
+        extractor_for = lambda r: single  # noqa: E731
+    else:
+        per_channel = {ch: BehavioralFeatureExtractor(users, period_start) for ch in work["channel"].unique()}
+        extractor_for = lambda r: per_channel[r["channel"]]  # noqa: E731
+
+    rows = replay_history(work.to_dict("records"), extractor_for, tx["transaction_id"].to_numpy(),
+                          reported_seconds(tx))
     feats = pd.DataFrame(rows, columns=FEATURE_NAMES).astype(np.float32)
     meta = tx[[c for c in META_COLUMNS if c in tx.columns]].reset_index(drop=True)
     return pd.concat([meta, feats], axis=1)
@@ -334,14 +562,15 @@ def extract_behavioral_features(tx_path: str | Path = RAW_DIR / "transactions.cs
 
 def load_or_build_features(tx_path: str | Path = RAW_DIR / "transactions.csv",
                            users_path: str | Path = RAW_DIR / "users.csv",
-                           cache_path: str | Path | None = None) -> pd.DataFrame:
+                           cache_path: str | Path | None = None,
+                           profile_scope: str = "unified") -> pd.DataFrame:
     tx_path, users_path = Path(tx_path), Path(users_path)
     if not tx_path.exists() or not users_path.exists():
         raise FileNotFoundError(f"Fichiers introuvables : {tx_path} / {users_path}. "
                                 "Lancez d'abord ml/generator/generate_synthetic_data.py")
-    tx = pd.read_csv(tx_path)
+    tx = pd.read_csv(tx_path, low_memory=False)
     users = pd.read_csv(users_path)
-    table = build_feature_table(tx, users, _period_start(tx["timestamp"], tx_path.parent))
+    table = build_feature_table(tx, users, _period_start(tx["timestamp"], tx_path.parent), profile_scope)
     if cache_path is not None:
         Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
         table.to_csv(cache_path, index=False)

@@ -1,0 +1,104 @@
+{
+ "transactions_test": 57796,
+ "fraudes": 1014,
+ "ingenierie_sociale": 197,
+ "reference_sans_signalements": {
+  "fraudes_arretees": 0.8432,
+  "ingenierie_sociale_arretee": 0.8782,
+  "honnetes_deranges": 0.00775
+ },
+ "par_taux_de_signalement": {
+  "0.005": {
+   "simulation": {
+    "campagnes": 353,
+    "signalements_arnaque": 199,
+    "arnaques_retenues": 195,
+    "signalements_legitimes": 122,
+    "legitimes_marques_a_tort": 60,
+    "numeros_extraits_ok": 195,
+    "mules_marquees": 143,
+    "mules_marquees_avant_premiere_victime": 95
+   },
+   "fraudes_arretees": 0.8481,
+   "ingenierie_sociale_arretee": 0.8883,
+   "par_typologie": {
+    "SOCIAL_ENGINEERING": 0.8883,
+    "SIM_SWAP": 0.9058,
+    "ACCOUNT_TAKEOVER": 0.7798
+   },
+   "honnetes_deranges": 0.00775,
+   "alertes_ajoutees_par_la_regle": 5,
+   "dont_vraies_fraudes": 5,
+   "honnetes_ajoutes": 0
+  },
+  "0.010": {
+   "simulation": {
+    "campagnes": 353,
+    "signalements_arnaque": 464,
+    "arnaques_retenues": 446,
+    "signalements_legitimes": 284,
+    "legitimes_marques_a_tort": 138,
+    "numeros_extraits_ok": 448,
+    "mules_marquees": 246,
+    "mules_marquees_avant_premiere_victime": 168
+   },
+   "fraudes_arretees": 0.8501,
+   "ingenierie_sociale_arretee": 0.8883,
+   "par_typologie": {
+    "SOCIAL_ENGINEERING": 0.8883,
+    "SIM_SWAP": 0.9162,
+    "ACCOUNT_TAKEOVER": 0.7798
+   },
+   "honnetes_deranges": 0.00775,
+   "alertes_ajoutees_par_la_regle": 7,
+   "dont_vraies_fraudes": 7,
+   "honnetes_ajoutes": 0
+  },
+  "0.020": {
+   "simulation": {
+    "campagnes": 353,
+    "signalements_arnaque": 899,
+    "arnaques_retenues": 853,
+    "signalements_legitimes": 551,
+    "legitimes_marques_a_tort": 249,
+    "numeros_extraits_ok": 863,
+    "mules_marquees": 306,
+    "mules_marquees_avant_premiere_victime": 230
+   },
+   "fraudes_arretees": 0.856,
+   "ingenierie_sociale_arretee": 0.8985,
+   "par_typologie": {
+    "SOCIAL_ENGINEERING": 0.8985,
+    "SIM_SWAP": 0.9267,
+    "ACCOUNT_TAKEOVER": 0.7982
+   },
+   "honnetes_deranges": 0.00777,
+   "alertes_ajoutees_par_la_regle": 14,
+   "dont_vraies_fraudes": 13,
+   "honnetes_ajoutes": 1
+  },
+  "0.050": {
+   "simulation": {
+    "campagnes": 353,
+    "signalements_arnaque": 2191,
+    "arnaques_retenues": 2063,
+    "signalements_legitimes": 1343,
+    "legitimes_marques_a_tort": 660,
+    "numeros_extraits_ok": 2085,
+    "mules_marquees": 348,
+    "mules_marquees_avant_premiere_victime": 309
+   },
+   "fraudes_arretees": 0.857,
+   "ingenierie_sociale_arretee": 0.9036,
+   "par_typologie": {
+    "SOCIAL_ENGINEERING": 0.9036,
+    "SIM_SWAP": 0.9267,
+    "ACCOUNT_TAKEOVER": 0.7982
+   },
+   "honnetes_deranges": 0.00778,
+   "alertes_ajoutees_par_la_regle": 16,
+   "dont_vraies_fraudes": 14,
+   "honnetes_ajoutes": 2
+  }
+ }
+}

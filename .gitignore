@@ -34,3 +34,6 @@ frontend/*.tsbuildinfo
 scripts/load/payloads.json
 
 mlflow.db
+
+# Certificats et clés privées (PKI de test : python scripts/security/generate_dev_pki.py)
+infra/nginx/certs/

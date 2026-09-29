@@ -1,6 +1,7 @@
 // Test de charge : trafic opérateurs vers /ingest (Nginx -> integration-layer -> scoring).
 // docker run --rm --network fraud-detection-rdc_default -v ./scripts/load:/load grafana/k6:0.53.0 run /load/k6_ingest.js
 import http from "k6/http";
+import crypto from "k6/crypto";
 import { check } from "k6";
 import { SharedArray } from "k6/data";
 import { Trend, Counter } from "k6/metrics";
@@ -39,8 +40,15 @@ export default function () {
   else if (body.transaction) body.transaction.id += suffix;
   else if (body.id_transaction) body.id_transaction += suffix;
   else if (body.stan) body.stan += suffix;
-  const res = http.post(`${BASE}/v1/transactions/${p.provider}`, JSON.stringify(body),
-    { headers: { "Content-Type": "application/json", "X-API-Key": p.key } });
+  // signature HMAC (même algorithme que shared/security/request_signing.py) ; chemin signé
+  // = /v1/..., sans le préfixe /ingest de la passerelle
+  const path = `/v1/transactions/${p.provider}`;
+  const raw = JSON.stringify(body);
+  const ts = String(Math.floor(Date.now() / 1000));
+  const canonical = [ts, "POST", path, crypto.sha256(raw, "hex")].join("\n");
+  const res = http.post(`${BASE}${path}`, raw, { headers: {
+    "Content-Type": "application/json", "X-API-Key": p.key,
+    "X-Timestamp": ts, "X-Signature": crypto.hmac("sha256", p.secret, canonical, "hex") } });
   const ok = check(res, { "statut 200": (r) => r.status === 200 });
   if (ok) {
     const d = res.json();

@@ -39,6 +39,16 @@ class BaseAdapter(ABC):
         except (TypeError, ValueError) as e:
             raise AdapterError(f"horodatage invalide : {value!r}") from e
 
+    @classmethod
+    def parse_optional_time(cls, value, fmt: str | None = None) -> datetime | None:
+        return None if value in (None, "") else cls.parse_time(value, fmt)
+
+    @staticmethod
+    def format_optional_time(value: datetime | None, fmt: str | None = None) -> str | None:
+        if value is None:
+            return None
+        return value.strftime(fmt) if fmt else value.isoformat()
+
     @staticmethod
     def require(payload: dict, *keys: str):
         missing = [k for k in keys if payload.get(k) in (None, "")]

@@ -32,6 +32,7 @@ class VodacomAdapter(BaseAdapter):
             merchant_country=p.get("MerchantCountry"),
             device_id=p["DeviceIMEI"], device_type=p.get("DeviceType", "smartphone"),
             ip_country=p.get("IPCountry"), location_province=p["Location"],
+            sim_swap_at=self.parse_optional_time(p.get("LastSimSwapTime"), "%Y%m%d%H%M%S"),
         )
 
     def from_unified(self, t: dict) -> dict:
@@ -46,4 +47,5 @@ class VodacomAdapter(BaseAdapter):
             "DeviceIMEI": t["device_id"], "DeviceType": t.get("device_type"),
             "Channel": t["access_channel"], "IPCountry": t.get("ip_country"),
             "Location": t["location_province"],
+            "LastSimSwapTime": self.format_optional_time(t.get("sim_swap_at"), "%Y%m%d%H%M%S"),
         }

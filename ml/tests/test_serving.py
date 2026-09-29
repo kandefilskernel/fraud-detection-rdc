@@ -65,6 +65,105 @@ def test_redis_store_matches_in_memory_extractor():
         assert got == pytest.approx(expected)
 
 
+NET_USERS = pd.DataFrame([{"user_id": f"U{i}", "wallet_id": f"24381000000{i}", "province": "Kinshasa",
+                           "kyc_level": 2, "kyc_tx_limit_usd": 1500.0, "account_age_days": 100 * (i + 1),
+                           "monthly_income_usd": 300.0, "has_visa_virtual": 0} for i in range(6)])
+
+
+def network_stream(n: int = 80) -> list[dict]:
+    """Plusieurs clients et opérateurs, portefeuilles partagés (mule, client, vendeur),
+    réceptions puis renvois : exerce tout l'état C1 (profil des portefeuilles)."""
+    rng = np.random.default_rng(3)
+    wallets = ["243777000001", "243777000002", "243810000003", "243888000001"]
+    ops = ["VODACOM", "AIRTEL", "ORANGE"]
+    out = []
+    for i in range(n):
+        uid = f"U{rng.integers(6)}"
+        kind = rng.choice(["P2P_SEND", "P2P_RECEIVE", "CASH_OUT"], p=[0.55, 0.3, 0.15])
+        kw = dict(transaction_id=f"N{i}", timestamp=datetime(2025, 11, 1) + pd.Timedelta(minutes=7 * i),
+                  user_id=uid, wallet_id=f"24381000000{uid[1]}", operator=ops[rng.integers(3)],
+                  tx_type=kind, amount=float(rng.integers(1, 80)), amount_usd=float(rng.integers(1, 80)),
+                  counterparty_id=wallets[rng.integers(4)] if kind != "CASH_OUT" else None,
+                  access_channel="AGENT" if kind == "CASH_OUT" else "APP",
+                  agent_id="A1" if kind == "CASH_OUT" else None, device_id=f"D{uid}")
+        out.append(make_tx(i, **kw))
+    return out
+
+
+def test_redis_store_matches_extractor_on_shared_wallets():
+    """C1 : profils de portefeuilles alimentés par plusieurs clients — parité Redis / mémoire."""
+    period_start = pd.Timestamp("2025-06-01")
+    mem = BehavioralFeatureExtractor(NET_USERS, period_start)
+    store = RedisFeatureStore(fakeredis.FakeRedis(), period_start.timestamp())
+    store.bulk_load(BehavioralFeatureExtractor(NET_USERS, period_start), {})
+    zero = lambda f: np.zeros(4, dtype=np.float32)  # noqa: E731
+    nonzero = 0
+    for tx in network_stream():
+        expected = mem.process(tx)
+        assert store.compute(tx, zero)["features"] == pytest.approx(expected)
+        nonzero += expected["cp_in_senders_7d"] > 0
+    assert nonzero > 10  # le scénario exerce bien le profil des portefeuilles
+
+
+def test_seeding_mid_stream_keeps_parity():
+    """Chemin réel : rejeu hors ligne jusqu'à une coupure, amorçage de Redis, puis temps réel."""
+    period_start = pd.Timestamp("2025-06-01")
+    stream = network_stream()
+    offline = BehavioralFeatureExtractor(NET_USERS, period_start)
+    for tx in stream[:50]:
+        offline.process(tx)
+    store = RedisFeatureStore(fakeredis.FakeRedis(), period_start.timestamp())
+    store.bulk_load(offline, {})
+    zero = lambda f: np.zeros(4, dtype=np.float32)  # noqa: E731
+    for tx in stream[50:]:
+        got = store.compute(tx, zero)["features"]   # lit Redis AVANT que offline ne change
+        assert got == pytest.approx(offline.process(tx))
+
+
+def test_reputation_parity_with_reports_interleaved():
+    """Signalements de fraude reçus en cours de route (topic fraud.confirmed) : mêmes variables
+    de réputation en mémoire (report) et via Redis (apply_report)."""
+    period_start = pd.Timestamp("2025-06-01")
+    stream = network_stream()
+    mem = BehavioralFeatureExtractor(NET_USERS, period_start)
+    store = RedisFeatureStore(fakeredis.FakeRedis(), period_start.timestamp())
+    store.bulk_load(BehavioralFeatureExtractor(NET_USERS, period_start), {})
+    zero = lambda f: np.zeros(4, dtype=np.float32)  # noqa: E731
+    seen_rep = 0
+    for i, tx in enumerate(stream):
+        if i >= 10 and i % 7 == 0:        # la transaction d'il y a 5 pas est signalée frauduleuse
+            event = {**stream[i - 5], "transaction_id": f"N{i - 5}"}
+            mem.report(event)
+            store.apply_report(event)
+        expected = mem.process(tx)
+        assert store.compute(tx, zero)["features"] == pytest.approx(expected)
+        seen_rep += expected["rep_user_frauds_30d"] > 0
+    assert seen_rep > 5
+
+
+def test_seeding_carries_reputation():
+    period_start = pd.Timestamp("2025-06-01")
+    stream = network_stream()
+    offline = BehavioralFeatureExtractor(NET_USERS, period_start)
+    for i, tx in enumerate(stream[:50]):
+        offline.process(tx)
+        if i % 9 == 0:
+            offline.report({**tx, "transaction_id": f"N{i}"})
+    store = RedisFeatureStore(fakeredis.FakeRedis(), period_start.timestamp())
+    store.bulk_load(offline, {})
+    zero = lambda f: np.zeros(4, dtype=np.float32)  # noqa: E731
+    for tx in stream[50:]:
+        assert store.compute(tx, zero)["features"] == pytest.approx(offline.process(tx))
+
+
+def test_user_state_without_c1_fields_still_loads():
+    """Profils écrits dans Redis avant C1 : lisibles (réceptions vides)."""
+    import json
+    raw = json.loads(user_state_to_json(_UserState(n=1)))
+    raw.pop("inflows")
+    assert len(user_state_from_json(json.dumps(raw)).inflows) == 0
+
+
 def test_blocked_transaction_is_recorded_as_failure():
     period_start = pd.Timestamp("2025-06-01")
     store = RedisFeatureStore(fakeredis.FakeRedis(), period_start.timestamp())

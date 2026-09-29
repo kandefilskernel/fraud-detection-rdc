@@ -7,6 +7,7 @@ services:
   redpanda:        { ports: !reset [], restart: always }
   redpanda-console: { profiles: [outils] }
   mailpit:         { profiles: [outils] }
+  wallet-demo:     { profiles: [outils] }   # démonstration uniquement
   scoring-service:
     ports: !reset []
     restart: always

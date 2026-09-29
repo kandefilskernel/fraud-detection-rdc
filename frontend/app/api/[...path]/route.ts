@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 const TARGET = process.env.BACKOFFICE_URL ?? "http://localhost:8003";
 
 async function proxy(req: NextRequest, { params }: { params: { path: string[] } }) {
+  // API interne du back-office (retours des opérateurs, service à service) : jamais via le navigateur
+  if (params.path[0] === "internal") return Response.json({ detail: "introuvable" }, { status: 404 });
   const url = `${TARGET}/${params.path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
   const headers = new Headers();
   for (const h of ["authorization", "content-type", "accept"]) {

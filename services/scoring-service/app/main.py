@@ -3,6 +3,9 @@ scoring-service : décision de fraude synchrone, en temps réel.
 
     POST /v1/score   transaction (schéma pivot) -> probabilité, niveau de risque, action,
                      explication. Le profil comportemental est lu ET mis à jour dans Redis.
+    POST /v1/scam-reports  SMS d'arnaque signalé par un client (texte déjà masqué par la couche
+                     d'intégration) -> classification NLP ; si c'est une arnaque, les numéros
+                     désignés sont marqués (règle BENEFICIAIRE_SIGNALE_PAR_SMS).
     GET  /health     état du service (modèle chargé, Redis joignable)
     GET  /metrics    métriques Prometheus (latence, décisions, erreurs)
 """
@@ -29,7 +32,11 @@ from app.events import EventPublisher
 from app.schemas import ScoreResponse
 from ml.serving.decision import DecisionPolicy
 from ml.serving.feature_store import PREFIX, RedisFeatureStore
+from ml.serving.idempotency import IdempotencyConflict, IdempotencyInProgress, IdempotencyStore, fingerprint
+from pydantic import BaseModel, Field
+from shared.kafka_config.topics import TOPIC_FRAUD_CONFIRMED
 from ml.serving.scorer import HybridScorer
+from ml.nlp.scam_sms import ScamSmsClassifier
 from shared.schemas.unified_transaction import UnifiedTransaction
 from shared.logging.logger_config import configure_logging
 
@@ -51,6 +58,9 @@ log = logging.getLogger("scoring")
 MODEL_VERSION = Gauge("scoring_model_info", "Version du modèle servie (1 = active)", ["version"],
                       multiprocess_mode="livemax")
 RELOADS = Counter("scoring_model_reloads_total", "Rechargements à chaud du modèle")
+REPLAYS = Counter("scoring_idempotent_replays_total", "Transactions renvoyées par un opérateur (déjà scorées)")
+REPUTATION_UPDATES = Counter("scoring_reputation_reports_total", "Fraudes confirmées intégrées au profil de réputation")
+SMS_REPORTS = Counter("scoring_scam_sms_reports_total", "SMS signalés par les clients", ["category", "outcome"])
 
 
 def _watch_model(stop: threading.Event, interval: float = 30.0) -> None:
@@ -72,6 +82,39 @@ def _watch_model(stop: threading.Event, interval: float = 30.0) -> None:
             log.exception("rechargement du modèle impossible pour l'instant")
 
 
+def report_event(d: dict) -> dict:
+    """Événement « fraude confirmée » -> format de RedisFeatureStore.apply_report. L'horodatage
+    est celui de la transaction frauduleuse, en heure locale naïve (même convention que ts)."""
+    tx_time = datetime.fromisoformat(str(d["tx_time"])).replace(tzinfo=None)
+    return {"transaction_id": d["transaction_id"], "ts": (tx_time - datetime(1970, 1, 1)).total_seconds(),
+            "tx_type": d.get("tx_type"), "user_id": d.get("user_id"), "device_id": d.get("device_id"),
+            "counterparty_id": d.get("counterparty_id"), "agent_id": d.get("agent_id"),
+            "merchant_id": d.get("merchant_id")}
+
+
+def _consume_confirmed_frauds(stop: threading.Event) -> None:
+    """Profil de réputation : chaque fraude confirmée (analyste, plainte, retour d'opérateur,
+    publiée par le back-office) marque ses entités dans Redis pour les transactions suivantes."""
+    try:
+        from confluent_kafka import Consumer
+        consumer = Consumer({"bootstrap.servers": settings.KAFKA_BOOTSTRAP_SERVERS,
+                             "group.id": "scoring-reputation", "auto.offset.reset": "earliest"})
+        consumer.subscribe([TOPIC_FRAUD_CONFIRMED])
+    except Exception:  # noqa: BLE001
+        log.exception("consommateur de réputation indisponible")
+        return
+    while not stop.is_set():
+        msg = consumer.poll(1.0)
+        if msg is None or msg.error():
+            continue
+        try:
+            state["store"].apply_report(report_event(json.loads(msg.value())))
+            REPUTATION_UPDATES.inc()
+        except Exception:  # noqa: BLE001 — un message invalide ne doit pas arrêter le consommateur
+            log.exception("signalement de fraude invalide ignoré")
+    consumer.close()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     r = redis.Redis.from_url(settings.REDIS_URL)
@@ -87,10 +130,18 @@ async def lifespan(_app: FastAPI):
         policy=DecisionPolicy(threshold=scorer.threshold),
         events=EventPublisher(settings.KAFKA_BOOTSTRAP_SERVERS, settings.KAFKA_ENABLED),
         api_keys={k.strip() for k in settings.SCORING_API_KEYS.split(",") if k.strip()},
+        idempotency=IdempotencyStore(r, ttl_s=settings.IDEMPOTENCY_TTL_S),
     )
     MODEL_VERSION.labels(scorer.model_version).set(1)
+    try:   # classifieur des SMS signalés (facultatif : sans lui, /v1/scam-reports répond 503)
+        state["sms"] = ScamSmsClassifier.load(Path(settings.ARTIFACTS_DIR) / "nlp")
+    except FileNotFoundError:
+        state["sms"] = None
+        log.warning("classifieur de SMS absent (ml/artifacts/nlp) : signalements SMS désactivés")
     stop = threading.Event()
     threading.Thread(target=_watch_model, args=(stop,), daemon=True).start()
+    if settings.KAFKA_ENABLED:
+        threading.Thread(target=_consume_confirmed_frauds, args=(stop,), daemon=True).start()
     yield
     stop.set()
     state["events"].flush()
@@ -111,6 +162,9 @@ def _score(tx: UnifiedTransaction) -> dict:
     # En temps réel le statut est inconnu (transaction pas encore exécutée) : le profil
     # enregistre la transaction comme réussie, ou échouée si elle est bloquée.
     tx_in = tx.to_feature_input(tx.status)
+    if tx.tx_type.value == "P2P_SEND" and tx.counterparty_id:
+        # signalements SMS du bénéficiaire (règle BENEFICIAIRE_SIGNALE_PAR_SMS, hors modèle)
+        tx_in["cp_scam_reports_30d"] = state["store"].scam_report_count(tx_in["counterparty_id"], tx_in["ts"])
 
     def decide(feats, x, history):
         res = scorer.score(x, history, explain="auto", top_k=settings.EXPLAIN_TOP_K)
@@ -132,6 +186,7 @@ def _score(tx: UnifiedTransaction) -> dict:
             "branch_scores": res.branch_scores,
             "branch_contributions": res.branch_contributions,
             "attention_on_history": res.attention,
+            "attribution": res.attribution,
         },
         "degraded": res.degraded,
         "degraded_branches": res.degraded_branches,
@@ -143,19 +198,42 @@ def _score(tx: UnifiedTransaction) -> dict:
 
 @app.post("/v1/score", response_model=ScoreResponse, dependencies=[Depends(require_api_key)])
 async def score(tx: UnifiedTransaction):
+    # Idempotence : un renvoi de l'opérateur reçoit la décision d'origine sans recompter la
+    # transaction dans le profil du client (ni la republier vers la base et les alertes).
+    idem: IdempotencyStore = state["idempotency"]
+    idem_key = idem.key(tx.channel.value, tx.operator, tx.transaction_id)
+    fp = fingerprint(tx.model_dump(mode="json", exclude={"status"}))
+    try:
+        previous = await run_in_threadpool(idem.begin, idem_key, fp)
+    except IdempotencyConflict as e:
+        ERRORS.labels("idempotency_conflict").inc()
+        raise HTTPException(status_code=409, detail=str(e))
+    except IdempotencyInProgress as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except redis.RedisError:
+        ERRORS.labels("redis").inc()
+        raise HTTPException(status_code=503, detail="feature store indisponible")
+    if previous is not None:
+        REPLAYS.inc()
+        return {**previous, "idempotent_replay": True}
+
     with LATENCY.time():
         try:
             result = await run_in_threadpool(_score, tx)
         except TimeoutError:
+            idem.abort(idem_key)
             ERRORS.labels("lock_timeout").inc()
             raise HTTPException(status_code=503, detail="profil client occupé, réessayer")
         except redis.RedisError:
+            idem.abort(idem_key)
             ERRORS.labels("redis").inc()
             raise HTTPException(status_code=503, detail="feature store indisponible")
         except Exception:  # noqa: BLE001 — jamais de 500 muet : l'appelant applique sa politique de repli
+            idem.abort(idem_key)
             ERRORS.labels("internal").inc()
             log.exception("échec du scoring", extra={"transaction_id": tx.transaction_id})
             raise HTTPException(status_code=500, detail="erreur interne du scoring")
+    idem.complete(idem_key, fp, result)
     DECISIONS.labels(result["action"], tx.channel.value).inc()
     RISK.labels(result["risk_level"]).inc()
     PROBA.observe(result["fraud_probability"])
@@ -172,13 +250,58 @@ async def score(tx: UnifiedTransaction):
         "transaction": tx.model_dump(mode="json"),
         "decision": {k: result[k] for k in ("action", "risk_level", "reason", "rules_triggered",
                                             "fraud_probability", "is_fraud_predicted", "threshold",
-                                            "model_version", "latency_ms", "degraded")},
+                                            "model_version", "latency_ms", "degraded",
+                                            "verification_method")},
         "explanation": result["explanation"],
         "features": result["features"],
     }
     state["events"].publish(event)
     KAFKA_FAIL.set(state["events"].failures)
     return result
+
+
+class FraudConfirmed(BaseModel):
+    transaction_id: str = Field(..., min_length=1, max_length=64)
+    tx_time: datetime
+    tx_type: str
+    user_id: str
+    device_id: str | None = None
+    counterparty_id: str | None = None
+    agent_id: str | None = None
+    merchant_id: str | None = None
+
+
+@app.post("/v1/reputation/report", dependencies=[Depends(require_api_key)])
+def reputation_report(body: FraudConfirmed):
+    """Voie directe (tests, reprise) ; en fonctionnement normal : topic Kafka fraud.confirmed."""
+    n = state["store"].apply_report(report_event(body.model_dump()))
+    REPUTATION_UPDATES.inc()
+    return {"transaction_id": body.transaction_id, "entities_updated": n}
+
+
+class ScamReport(BaseModel):
+    report_id: str = Field(..., min_length=1, max_length=64)
+    received_at: datetime
+    masked_text: str = Field(..., min_length=1, max_length=1000)    # numéros déjà remplacés par <NUMERO>
+    sender_is_number: bool | None = None
+    numbers: list[str] = Field(default_factory=list, max_length=10)  # numéros désignés (pseudonymisés si besoin)
+
+
+@app.post("/v1/scam-reports", dependencies=[Depends(require_api_key)])
+def scam_report(body: ScamReport):
+    clf: ScamSmsClassifier | None = state.get("sms")
+    if clf is None:
+        raise HTTPException(503, "classifieur de SMS non disponible")
+    res = clf.classify(body.masked_text, body.sender_is_number)
+    flagged: list[str] = []
+    # un message envoyé sous le nom d'un opérateur ne sert jamais à marquer un numéro
+    if res["is_scam"] and body.sender_is_number is not False:
+        ts = (body.received_at.replace(tzinfo=None) - datetime(1970, 1, 1)).total_seconds()
+        for n in dict.fromkeys(body.numbers):
+            state["store"].add_scam_report(n, body.report_id, ts)
+            flagged.append(n)
+    SMS_REPORTS.labels(res["category"], "numeros_marques" if flagged else "non_marque").inc()
+    return {"report_id": body.report_id, **res, "flagged_numbers": flagged, "model_version": clf.version}
 
 
 @app.get("/health")

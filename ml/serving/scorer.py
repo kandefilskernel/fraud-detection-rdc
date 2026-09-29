@@ -1,15 +1,16 @@
 """
 Inférence temps réel d'UNE transaction avec le modèle hybride entraîné.
 
-    x (58 variables normalisées) ──► XGBoost ─────────┐
-    [9 transactions précédentes + x] ──► LSTM-Attention ─┼─► méta-apprenant ─► P(fraude)
-    x ──► Autoencodeur (erreur de reconstruction) ──────┘
+    x (variables normalisées, FEATURE_NAMES) ──► arbres (forêt aléatoire ou XGBoost) ─┐
+    [9 transactions précédentes + x] ──► LSTM-Attention ────────────────────────┴─► méta-apprenant ─► P(fraude)
+    (autoencodeur en option : branche retirée après la sélection de modèle)
 
 Mode dégradé : si une branche neuronale échoue, sa contribution est remplacée par sa
 valeur moyenne (score standardisé nul pour le méta-apprenant) et la réponse l'indique.
 
 Explicabilité, calculée à chaque décision :
-    - contributions SHAP exactes de XGBoost (TreeSHAP natif de xgboost, sans dépendance) ;
+    - contributions par variable de la branche arbres : TreeSHAP natif pour XGBoost, méthode
+      de Saabas (exacte et additive) pour la forêt aléatoire aplatie (ml/models/flat_forest.py) ;
     - part de chaque branche dans la décision (coefficient × score standardisé) ;
     - poids d'attention du LSTM sur les transactions passées.
 """
@@ -26,8 +27,8 @@ import torch
 import xgboost as xgb
 
 from ml.features.feature_engineering import FEATURE_NAMES
+from ml.models.flat_forest import FlatForest
 from ml.models.hybrid_ensemble import HybridEnsemble
-from ml.models.meta_learner import BRANCH_NAMES
 
 torch.set_num_threads(1)  # une requête = un cœur ; le parallélisme vient des workers uvicorn
 
@@ -41,12 +42,14 @@ class ScoreResult:
     attention: list
     degraded: bool
     degraded_branches: list
+    attribution: str = "TreeSHAP"
 
 
 class HybridScorer:
     def __init__(self, artifacts_dir: str | Path):
         d = Path(artifacts_dir)
         self.model = HybridEnsemble.load(d)
+        self.branches = self.model.branches
         self.metadata = json.loads((d / "metadata.json").read_text(encoding="utf-8"))
         prep = json.loads((d / "preprocessing.json").read_text(encoding="utf-8"))
         self.scaler = joblib.load(d / "scaler.pkl")
@@ -64,13 +67,20 @@ class HybridScorer:
         logreg = self.model.meta.named_steps["logreg"]
         self._coef = logreg.coef_[0].astype(np.float64)
         self._intercept = float(logreg.intercept_[0])
-        self._booster = self.model.xgb.get_booster()
-        # une prédiction = une transaction : le parallélisme OpenMP (n_jobs=-1 à l'entraînement)
-        # ne fait ici que créer de la contention entre workers ; on force un seul thread
-        self._booster.set_param({"nthread": 1})
-        # l'early stopping a retenu best_iteration : ne pas utiliser les arbres suivants
-        best = getattr(self.model.xgb, "best_iteration", None)
-        self._iter_range = (0, best + 1) if best is not None else (0, 0)
+        self.tree_kind = self.model.tree_kind
+        if self.tree_kind == "xgboost":
+            self._booster = self.model.xgb.get_booster()
+            # une prédiction = une transaction : le parallélisme OpenMP (n_jobs=-1 à l'entraînement)
+            # ne fait ici que créer de la contention entre workers ; on force un seul thread
+            self._booster.set_param({"nthread": 1})
+            # l'early stopping a retenu best_iteration : ne pas utiliser les arbres suivants
+            best = getattr(self.model.xgb, "best_iteration", None)
+            self._iter_range = (0, best + 1) if best is not None else (0, 0)
+            self.attribution = "TreeSHAP (XGBoost)"
+        else:
+            # scikit-learn parcourt les arbres un à un (~40 ms) : version aplatie (~quelques ms)
+            self._forest = FlatForest(self.model.tree)
+            self.attribution = "Saabas (forêt aléatoire)"
         self.model_version = str(self.metadata.get("trained_at", "inconnue"))
 
     # ------------------------------------------------------------------ prétraitement
@@ -100,9 +110,13 @@ class HybridScorer:
         degraded = []
         scores = {}
 
-        # prédiction directe sans DMatrix (~0,5 ms au lieu de ~2 ms)
-        scores["xgboost"] = float(self._booster.inplace_predict(
-            X1, iteration_range=self._iter_range, predict_type="margin")[0])
+        if self.tree_kind == "xgboost":
+            # prédiction directe sans DMatrix (~0,5 ms au lieu de ~2 ms)
+            scores["xgboost"] = float(self._booster.inplace_predict(
+                X1, iteration_range=self._iter_range, predict_type="margin")[0])
+        else:
+            p_rf = min(max(self._forest.predict_proba_one(x), 1e-5), 1 - 1e-5)
+            scores["random_forest"] = math.log(p_rf / (1 - p_rf))
 
         attention = []
         try:
@@ -115,14 +129,15 @@ class HybridScorer:
         except Exception:  # noqa: BLE001 — mode dégradé
             degraded.append("lstm_attention")
 
-        try:
-            with torch.no_grad():
-                err = self.model.ae.reconstruction_error(torch.from_numpy(X1)).numpy()[0]
-            scores["autoencoder"] = float(np.log(err + 1e-6))
-        except Exception:  # noqa: BLE001
-            degraded.append("autoencoder")
+        if self.model.ae is not None:
+            try:
+                with torch.no_grad():
+                    err = self.model.ae.reconstruction_error(torch.from_numpy(X1)).numpy()[0]
+                scores["autoencoder"] = float(np.log(err + 1e-6))
+            except Exception:  # noqa: BLE001
+                degraded.append("autoencoder")
 
-        b = np.array([scores.get(n, self._branch_mean[i]) for i, n in enumerate(BRANCH_NAMES)])
+        b = np.array([scores.get(n, self._branch_mean[i]) for i, n in enumerate(self.branches)])
         z = (b - self._branch_mean) / self._branch_std
         contrib = self._coef * z
         logit_meta = self._intercept + float(contrib.sum())
@@ -130,9 +145,13 @@ class HybridScorer:
 
         top = []
         if explain is True or (explain == "auto" and prob >= self.threshold / 5):
-            dm = xgb.DMatrix(X1)
-            shap = self._booster.predict(dm, pred_contribs=True,
-                                         iteration_range=self._iter_range)[0][:-1]  # dernière col. = biais
+            if self.tree_kind == "xgboost":
+                dm = xgb.DMatrix(X1)
+                shap = self._booster.predict(dm, pred_contribs=True,
+                                             iteration_range=self._iter_range)[0][:-1]  # dernière col. = biais
+            else:
+                # explication calculée seulement pour les alertes potentielles (~3 % des transactions)
+                shap = self._forest.explain_one(x)[1]   # points de probabilité (somme + biais = P forêt)
             order = np.argsort(-np.abs(shap))[:top_k]
             raw_vals = x.astype(np.float64) * self._scale + self._mean
             top = [{"feature": self.feature_names[i], "shap": round(float(shap[i]), 4),
@@ -141,9 +160,10 @@ class HybridScorer:
         return ScoreResult(
             probability=prob,
             branch_scores={k: round(v, 4) for k, v in scores.items()},
-            branch_contributions={n: round(float(c), 4) for n, c in zip(BRANCH_NAMES, contrib)},
+            branch_contributions={n: round(float(c), 4) for n, c in zip(self.branches, contrib)},
             top_features=top,
             attention=attention,
             degraded=bool(degraded),
             degraded_branches=degraded,
+            attribution=self.attribution,
         )

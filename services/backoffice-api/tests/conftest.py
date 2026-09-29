@@ -18,7 +18,7 @@ PG = dict(user=os.getenv("POSTGRES_USER", "nuru_admin"),
 TEST_DB = "fraud_test"
 os.environ.update(
     DATABASE_URL=f"postgresql+psycopg2://{PG['user']}:{PG['password']}@{PG['host']}:{PG['port']}/{TEST_DB}",
-    KAFKA_ENABLED="false", JWT_SECRET_KEY="test-secret",
+    KAFKA_ENABLED="false", JWT_SECRET_KEY="test-secret", INTERNAL_API_KEY="test-internal-key",
     BOOTSTRAP_ADMIN_EMAIL="admin@test.local", BOOTSTRAP_ADMIN_PASSWORD="AdminTest-2026!")
 
 

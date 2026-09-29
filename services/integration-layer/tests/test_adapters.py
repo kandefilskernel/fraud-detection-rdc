@@ -61,3 +61,24 @@ def test_unknown_type_is_rejected():
     msg["type_operation"] = "INCONNU"
     with pytest.raises(AdapterError):
         OrangeAdapter().to_unified(msg)
+
+
+def test_sim_swap_date_roundtrip_for_every_mobile_money_operator():
+    swap = datetime(2025, 11, 2, 19, 40, 0)
+    for adapter, operator in [(VodacomAdapter(), "VODACOM"), (AirtelAdapter(), "AIRTEL"), (OrangeAdapter(), "ORANGE")]:
+        u = adapter.to_unified(adapter.from_unified({**MM_TX, "operator": operator, "sim_swap_at": swap}))
+        assert u.sim_swap_at == swap
+        assert u.hours_since_sim_swap() == pytest.approx((MM_TX["timestamp"] - swap).total_seconds() / 3600)
+        absent = adapter.to_unified(adapter.from_unified({**MM_TX, "operator": operator}))
+        assert absent.sim_swap_at is None and absent.hours_since_sim_swap() is None
+
+
+def test_visa_network_fields_and_iso8583_codes():
+    a = VisaVirtualAdapter()
+    u = a.to_unified(a.from_unified({**CARD_TX, "network_risk_score": 91, "three_ds_authenticated": True}))
+    assert u.network_risk_score == 91 and u.three_ds_authenticated is True
+    assert [a.authorization_response(x) for x in ("APPROVE", "VERIFY", "BLOCK")] == ["00", "1A", "59"]
+    msg = a.from_unified(CARD_TX)
+    msg["mti"] = "0400"   # annulation : pas une demande d'autorisation
+    with pytest.raises(AdapterError):
+        a.to_unified(msg)

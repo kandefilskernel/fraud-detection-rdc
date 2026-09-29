@@ -81,6 +81,9 @@ services:
     command: ["python", "-m", "ml.serving.seed_feature_store", "--if-empty"]
     environment:
       REDIS_URL: redis://redis:6379/0
+      # doit être identique à l'integration-layer (sinon les clients paraissent inconnus)
+      PSEUDONYMIZE_IDS: ${PSEUDONYMIZE_IDS:-false}
+      PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY:-}
     volumes:
       - ./ml/data:/srv/ml/data:ro
     depends_on:
@@ -117,6 +120,18 @@ services:
       SCORING_URL: http://scoring-service:8001
       SCORING_API_KEY: ${SCORING_API_KEY:-dev-scoring-key}
       OPERATOR_API_KEYS: ${OPERATOR_API_KEYS:-vodacom:dev-vodacom-key,airtel:dev-airtel-key,orange:dev-orange-key,visa:dev-visa-key}
+      # sécurité des messages : secret HMAC par opérateur, distinct de la clé d'API
+      OPERATOR_HMAC_SECRETS: ${OPERATOR_HMAC_SECRETS:-vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,orange:dev-orange-hmac,visa:dev-visa-hmac}
+      REQUIRE_SIGNATURE: ${REQUIRE_SIGNATURE:-true}
+      OPERATOR_IP_ALLOWLIST: ${OPERATOR_IP_ALLOWLIST:-}
+      # cadre légal : demo | operator_instance | shared_platform (voir docs/INTEGRATION_OPERATEURS.md)
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-demo}
+      OPERATOR_ID: ${OPERATOR_ID:-}
+      PSEUDONYMIZE_IDS: ${PSEUDONYMIZE_IDS:-false}
+      PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY:-}
+      # retours des opérateurs -> API interne du back-office
+      BACKOFFICE_URL: http://backoffice-api:8003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
     ports:
       - "8002:8002"
     depends_on:
@@ -135,6 +150,10 @@ services:
       POSTGRES_HOST: postgres
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       CORS_ORIGINS: http://localhost:3000,http://localhost
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}   # retours des opérateurs
+      # assistant d'enquête : sans clé, la note est assemblée sans modèle de langage
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-claude-opus-5}
     ports:
       - "8003:8003"
     depends_on:
@@ -191,6 +210,30 @@ services:
       BACKOFFICE_URL: http://backoffice-api:8003
     depends_on:
       backoffice-api:
+        condition: service_healthy
+
+  # Démonstration : application « portefeuille client » + serveur opérateur simulé
+  # http://localhost/portefeuille/ (ou http://<IP du PC>/portefeuille/ depuis un téléphone)
+  wallet-demo:
+    image: fraud-rdc/wallet-demo:dev
+    build:
+      context: .
+      dockerfile: services/wallet-demo/Dockerfile
+    container_name: nuru_wallet_demo
+    restart: unless-stopped
+    environment:
+      INTEGRATION_URL: http://integration-layer:8002
+      OPERATOR_API_KEYS: ${OPERATOR_API_KEYS:-vodacom:dev-vodacom-key,airtel:dev-airtel-key,orange:dev-orange-key,visa:dev-visa-key}
+      OPERATOR_HMAC_SECRETS: ${OPERATOR_HMAC_SECRETS:-vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,orange:dev-orange-hmac,visa:dev-visa-hmac}
+      DATA_DIR: /srv/ml/data/raw
+      PREPROCESSING_JSON: /srv/ml/artifacts/preprocessing.json
+    volumes:
+      - ./ml/data/raw:/srv/ml/data/raw:ro
+      - ./ml/artifacts/preprocessing.json:/srv/ml/artifacts/preprocessing.json:ro
+    ports:
+      - "8010:8010"
+    depends_on:
+      integration-layer:
         condition: service_healthy
 
   # Point d'entrée unique : http://localhost (tableau de bord) et http://localhost/ingest/... (opérateurs)

@@ -36,6 +36,7 @@ class AirtelAdapter(BaseAdapter):
             merchant_country=cp.get("merchant_country"),
             device_id=d["imei"], device_type=d.get("type", "smartphone"),
             ip_country=d.get("ip_country"), location_province=s["province"],
+            sim_swap_at=self.parse_optional_time(s.get("last_sim_swap")),
         )
 
     def from_unified(self, t: dict) -> dict:
@@ -44,7 +45,8 @@ class AirtelAdapter(BaseAdapter):
                             "amount": t["amount"], "currency": t["currency"],
                             "timestamp": t["timestamp"].isoformat(), "status": t.get("status")},
             "subscriber": {"msisdn": t.get("wallet_id"), "customer_id": t["user_id"],
-                           "balance_usd": t["balance_before_usd"], "province": t["location_province"]},
+                           "balance_usd": t["balance_before_usd"], "province": t["location_province"],
+                           "last_sim_swap": self.format_optional_time(t.get("sim_swap_at"))},
             "device": {"imei": t["device_id"], "type": t.get("device_type"),
                        "channel": t["access_channel"], "ip_country": t.get("ip_country")},
             "counterparty": {"msisdn": t.get("counterparty_id"), "agent_code": t.get("agent_id"),

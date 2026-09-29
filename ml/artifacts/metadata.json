@@ -1,18 +1,93 @@
 {
-    "threshold": 0.5171225045356815,
-    "input_dim": 58,
+    "threshold": 0.25421416784462186,
+    "input_dim": 76,
     "lstm_hidden_dim": 64,
     "branch_order": [
-        "xgboost",
+        "random_forest",
         "lstm_attention",
         "autoencoder"
     ],
     "meta_learner_coefficients": {
-        "xgboost": 1.3834,
-        "lstm_attention": 1.2967,
-        "autoencoder": 0.2758
+        "random_forest": 2.4722,
+        "lstm_attention": 0.693,
+        "autoencoder": 0.0174
     },
-    "trained_at": "2026-09-25T23:48:30",
+    "trained_at": "2026-09-28T15:50:08",
+    "previous_version": "2026-09-28T00:26:07",
+    "selection": [
+        "ml/reports/selection_modele.json",
+        "ml/reports/selection_foret.json"
+    ],
+    "test_metrics": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4862,
+        "roc_auc": 0.9913,
+        "recall_at_1pct_fpr": 0.9005,
+        "precision": 0.4464,
+        "recall": 0.6754,
+        "f1": 0.5375,
+        "false_positive_rate": 0.00557
+    },
+    "test_metrics_by_channel": {
+        "MOBILE_MONEY": {
+            "n": 53490,
+            "n_fraud": 343,
+            "pr_auc": 0.5048,
+            "roc_auc": 0.9952,
+            "recall_at_1pct_fpr": 0.9329,
+            "precision": 0.4547,
+            "recall": 0.7026,
+            "f1": 0.5521,
+            "false_positive_rate": 0.00544
+        },
+        "VISA_VIRTUAL": {
+            "n": 4306,
+            "n_fraud": 39,
+            "pr_auc": 0.3247,
+            "roc_auc": 0.9058,
+            "recall_at_1pct_fpr": 0.5641,
+            "precision": 0.3542,
+            "recall": 0.4359,
+            "f1": 0.3908,
+            "false_positive_rate": 0.00727
+        }
+    },
+    "test_metrics_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.9555,
+        "roc_auc": 0.998,
+        "recall_at_1pct_fpr": 0.9606,
+        "precision": 0.9983,
+        "recall": 0.569,
+        "f1": 0.7249,
+        "false_positive_rate": 2e-05
+    },
+    "test_metrics_truth_by_channel": {
+        "MOBILE_MONEY": {
+            "n": 53490,
+            "n_fraud": 862,
+            "pr_auc": 0.9739,
+            "roc_auc": 0.999,
+            "recall_at_1pct_fpr": 0.9849,
+            "precision": 0.9981,
+            "recall": 0.6137,
+            "f1": 0.7601,
+            "false_positive_rate": 2e-05
+        },
+        "VISA_VIRTUAL": {
+            "n": 4306,
+            "n_fraud": 152,
+            "pr_auc": 0.8126,
+            "roc_auc": 0.9715,
+            "recall_at_1pct_fpr": 0.7763,
+            "precision": 1.0,
+            "recall": 0.3158,
+            "f1": 0.48,
+            "false_positive_rate": 0.0
+        }
+    },
     "train_config": {
         "seed": 42,
         "xgb_estimators": 600,
@@ -20,42 +95,10 @@
         "lstm_neg_sample_rate": 0.3,
         "ae_epochs": 30,
         "skip_baselines": false,
-        "use_mlflow": false
-    },
-    "xgb_best_iteration": 234,
-    "test_metrics": {
-        "n": 50309,
-        "n_fraud": 767,
-        "pr_auc": 0.9911,
-        "roc_auc": 0.9998,
-        "recall_at_1pct_fpr": 0.9987,
-        "precision": 0.9702,
-        "recall": 0.9335,
-        "f1": 0.9515,
-        "false_positive_rate": 0.00044
-    },
-    "test_metrics_by_channel": {
-        "MOBILE_MONEY": {
-            "n": 46226,
-            "n_fraud": 618,
-            "pr_auc": 0.9871,
-            "roc_auc": 0.9998,
-            "recall_at_1pct_fpr": 0.9984,
-            "precision": 0.9659,
-            "recall": 0.9175,
-            "f1": 0.9411,
-            "false_positive_rate": 0.00044
-        },
-        "VISA_VIRTUAL": {
-            "n": 4083,
-            "n_fraud": 149,
-            "pr_auc": 1.0,
-            "roc_auc": 1.0,
-            "recall_at_1pct_fpr": 1.0,
-            "precision": 0.9868,
-            "recall": 1.0,
-            "f1": 0.9933,
-            "false_positive_rate": 0.00051
-        }
+        "use_mlflow": true,
+        "exclude_groups": [],
+        "reports_dir": "ml/reports",
+        "save_artifacts": true,
+        "processed_dir": "ml\\data\\processed"
     }
 }

@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from shared.kafka_config.topics import TOPIC_ANALYST_FEEDBACK, TOPIC_AUDIT_LOGS
+from shared.kafka_config.topics import TOPIC_ANALYST_FEEDBACK, TOPIC_AUDIT_LOGS, TOPIC_FRAUD_CONFIRMED
 
 log = logging.getLogger("backoffice.events")
 
@@ -38,6 +38,15 @@ class Publisher:
         self._send(TOPIC_ANALYST_FEEDBACK, transaction_id, {
             "event_id": uuid.uuid4().hex, "ts": datetime.now(timezone.utc).isoformat(), "transaction_id": transaction_id,
             "label": label, "analyst": analyst, "case_id": case_id})
+
+    def fraud_confirmed(self, tx, source: str) -> None:
+        """Fraude confirmée : ses entités (appareil, portefeuille, agent, marchand, compte)
+        alimentent le profil de réputation du scoring (topic fraud.confirmed)."""
+        self._send(TOPIC_FRAUD_CONFIRMED, tx.transaction_id, {
+            "event_id": uuid.uuid4().hex, "ts": datetime.now(timezone.utc).isoformat(), "source": source,
+            "transaction_id": tx.transaction_id, "tx_time": tx.tx_time.isoformat(), "tx_type": tx.tx_type,
+            "user_id": tx.user_id, "device_id": tx.device_id, "counterparty_id": tx.counterparty_id,
+            "agent_id": tx.agent_id, "merchant_id": tx.merchant_id})
 
     def flush(self) -> None:
         if self.producer is not None:

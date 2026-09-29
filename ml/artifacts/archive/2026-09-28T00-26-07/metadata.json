@@ -1,0 +1,65 @@
+{
+    "threshold": 0.20026579257830565,
+    "input_dim": 76,
+    "lstm_hidden_dim": 64,
+    "branch_order": [
+        "xgboost",
+        "lstm_attention",
+        "autoencoder"
+    ],
+    "meta_learner_coefficients": {
+        "xgboost": 0.9342,
+        "lstm_attention": 0.7035,
+        "autoencoder": 0.1199
+    },
+    "trained_at": "2026-09-28T00:26:07",
+    "train_config": {
+        "seed": 42,
+        "xgb_estimators": 600,
+        "lstm_epochs": 8,
+        "lstm_neg_sample_rate": 0.3,
+        "ae_epochs": 30,
+        "skip_baselines": false,
+        "use_mlflow": true,
+        "exclude_groups": [],
+        "reports_dir": "ml/reports",
+        "save_artifacts": true,
+        "processed_dir": "ml\\data\\processed"
+    },
+    "xgb_best_iteration": 97,
+    "test_metrics": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4773,
+        "roc_auc": 0.9937,
+        "recall_at_1pct_fpr": 0.8848,
+        "precision": 0.4143,
+        "recall": 0.7147,
+        "f1": 0.5245,
+        "false_positive_rate": 0.00672
+    },
+    "test_metrics_by_channel": {
+        "MOBILE_MONEY": {
+            "n": 53490,
+            "n_fraud": 343,
+            "pr_auc": 0.5015,
+            "roc_auc": 0.9955,
+            "recall_at_1pct_fpr": 0.9504,
+            "precision": 0.4335,
+            "recall": 0.7318,
+            "f1": 0.5445,
+            "false_positive_rate": 0.00617
+        },
+        "VISA_VIRTUAL": {
+            "n": 4306,
+            "n_fraud": 39,
+            "pr_auc": 0.2615,
+            "roc_auc": 0.9275,
+            "recall_at_1pct_fpr": 0.5128,
+            "precision": 0.275,
+            "recall": 0.5641,
+            "f1": 0.3697,
+            "false_positive_rate": 0.01359
+        }
+    }
+}

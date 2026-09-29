@@ -1,0 +1,61 @@
+{
+ "k": 8,
+ "archive": {
+  "n_cases": 4152
+ },
+ "typology": {
+  "n_frauds": 1014,
+  "accuracy": 0.883,
+  "baseline_majority_accuracy": 0.24,
+  "per_type": {
+   "ACCOUNT_TAKEOVER": {
+    "n": 109,
+    "accuracy": 0.596
+   },
+   "AGENT_FRAUD": {
+    "n": 173,
+    "accuracy": 0.913
+   },
+   "CARD_TESTING": {
+    "n": 64,
+    "accuracy": 0.469
+   },
+   "CNP_FRAUD": {
+    "n": 52,
+    "accuracy": 0.923
+   },
+   "SIM_SWAP": {
+    "n": 191,
+    "accuracy": 0.937
+   },
+   "SMURFING": {
+    "n": 192,
+    "accuracy": 0.995
+   },
+   "SOCIAL_ENGINEERING": {
+    "n": 197,
+    "accuracy": 0.964
+   },
+   "TOPUP_DRAIN": {
+    "n": 36,
+    "accuracy": 0.944
+   }
+  }
+ },
+ "alert_triage": {
+  "n_alerts": 1733,
+  "fraud_rate_in_alerts": 0.546,
+  "neighbors_fraud_share": {
+   "roc_auc": 0.936,
+   "pr_auc": 0.943
+  },
+  "hybrid_score": {
+   "roc_auc": 0.955,
+   "pr_auc": 0.965
+  },
+  "average_of_ranks": {
+   "roc_auc": 0.965,
+   "pr_auc": 0.976
+  }
+ }
+}

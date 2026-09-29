@@ -1,0 +1,12 @@
+key,model,threshold,pr_auc,roc_auc,recall_at_1pct_fpr,precision,recall,f1,false_positive_rate,pr_auc_mobile_money,pr_auc_visa_virtual,pr_auc_truth,recall_truth
+ablation_without_autoencoder,Hybride sans autoencoder,0.21886,0.5002,0.9923,0.8403,0.4312,0.6728,0.5256,0.0059,0.5277,0.3327,0.9088,0.572
+hybrid,Hybride (XGB + LSTM + AE),0.19318,0.4928,0.9923,0.8325,0.4099,0.6963,0.516,0.00667,0.5269,0.3197,0.9087,0.6183
+branch_xgboost,Branche seule : xgboost,0.24643,0.4846,0.989,0.7723,0.4494,0.6047,0.5156,0.00493,0.5128,0.394,0.8249,0.4694
+ablation_without_lstm_attention,Hybride sans lstm_attention,0.22346,0.4674,0.99,0.7539,0.4512,0.5445,0.4935,0.00441,0.5188,0.3737,0.8371,0.432
+baseline_random_forest,Random Forest,0.29531,0.4607,0.9891,0.8665,0.4275,0.733,0.54,0.00653,0.4773,0.3685,0.9309,0.6292
+branch_lstm_attention,Branche seule : lstm_attention,1.97634,0.4176,0.9865,0.7853,0.3771,0.6911,0.488,0.00759,0.4421,0.206,0.8512,0.6213
+ablation_without_xgboost,Hybride sans xgboost,0.20385,0.4031,0.9869,0.7906,0.375,0.699,0.4881,0.00775,0.4417,0.1825,0.8566,0.6331
+baseline_logreg,Régression logistique,5.17668,0.3514,0.9875,0.6414,0.3669,0.534,0.435,0.00613,0.4097,0.1123,0.7823,0.4862
+baseline_isolation_forest,Isolation Forest,0.53654,0.0731,0.8643,0.2173,0.1341,0.2016,0.1611,0.00866,0.079,0.0844,0.1949,0.1972
+branch_autoencoder,Branche seule : autoencoder,-0.12224,0.0398,0.8714,0.0759,0.0564,0.2435,0.0916,0.0271,0.0455,0.0377,0.1314,0.2594
+baseline_rules,Règles métier,2.0,0.0347,0.6908,0.1178,0.1264,0.0576,0.0791,0.00265,0.0301,0.1047,0.0828,0.0582

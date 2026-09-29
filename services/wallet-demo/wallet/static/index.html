@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f6e56">
+  <title>Portefeuille démo</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="static/icon.svg">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- Choix du profil -->
+    <section id="screen-profiles" class="screen">
+      <header class="hero">
+        <div class="logo" aria-hidden="true">₣</div>
+        <h1>Portefeuille démo</h1>
+        <p>Application client <strong>simulée</strong> reliée en temps réel à la plateforme de détection de fraude.</p>
+      </header>
+      <h2 class="section-title">Choisir un client</h2>
+      <div id="profiles" class="list"></div>
+      <p class="fineprint">Clients du jeu de données synthétique, noms fictifs. Aucune donnée réelle.</p>
+    </section>
+
+    <!-- Accueil -->
+    <section id="screen-home" class="screen hidden">
+      <header class="topbar">
+        <button class="icon-btn" id="btn-switch" aria-label="Changer de client">←</button>
+        <div>
+          <div class="who" id="who"></div>
+          <div class="sub" id="who-sub"></div>
+        </div>
+        <span class="clock" id="demo-clock" title="Heure de la démonstration"></span>
+      </header>
+
+      <div class="balance-card">
+        <div class="label">Solde disponible</div>
+        <div class="balance" id="balance"></div>
+        <div class="balance-alt" id="balance-alt"></div>
+        <div id="sim-banner" class="sim-banner hidden">⚠ Mode fraudeur : SIM changée il y a 2 h, autre téléphone</div>
+      </div>
+
+      <div class="actions">
+        <button class="action" id="btn-send"><span>↗</span>Envoyer</button>
+        <button class="action" id="btn-withdraw"><span>⎘</span>Retirer</button>
+      </div>
+
+      <h2 class="section-title">Scénarios de démonstration</h2>
+      <div class="scenarios">
+        <button class="scenario" id="sc-scam">
+          <strong>Arnaque « envoi par erreur »</strong>
+          <span>Un inconnu vous envoie de l'argent puis réclame beaucoup plus</span>
+        </button>
+        <button class="scenario" id="sc-mule">
+          <strong>Envoi à un numéro déjà signalé</strong>
+          <span>Portefeuille d'une mule connue de la plateforme</span>
+        </button>
+        <button class="scenario" id="sc-sim">
+          <strong id="sc-sim-title">Simuler un SIM swap</strong>
+          <span id="sc-sim-sub">Le fraudeur a obtenu une nouvelle SIM à votre nom</span>
+        </button>
+        <button class="scenario hidden" id="sc-drain">
+          <strong>Le fraudeur vide le compte</strong>
+          <span>Retrait de presque tout le solde chez un agent inconnu</span>
+        </button>
+      </div>
+
+      <h2 class="section-title">Historique</h2>
+      <div id="history" class="list"></div>
+      <p class="fineprint">Chaque opération est signée par le serveur de l'opérateur (simulé) puis
+        décidée par la plateforme en quelques dizaines de millisecondes.</p>
+    </section>
+  </div>
+
+  <!-- Feuilles (formulaires et résultats) -->
+  <div id="sheet-backdrop" class="backdrop hidden"></div>
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div id="sheet-body"></div>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="static/app.js"></script>
+</body>
+</html>

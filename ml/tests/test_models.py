@@ -41,6 +41,39 @@ def test_attention_ignores_padding():
     assert np.allclose(weights.sum(1).detach().numpy(), 1.0, atol=1e-5)
 
 
+def test_compare_runs_detects_a_better_model(tmp_path):
+    """Un modèle B nettement meilleur que A : écart positif et significatif."""
+    import json
+    from ml.training.compare_runs import compare
+    rng = np.random.default_rng(0)
+    n = 4000
+    y = (rng.random(n) < 0.05).astype(int)
+    base = pd.DataFrame({"transaction_id": [f"T{i}" for i in range(n)], "user_id": [f"U{i % 400}" for i in range(n)],
+                         "channel": np.where(rng.random(n) < 0.8, "MOBILE_MONEY", "VISA_VIRTUAL"),
+                         "is_fraud": y, "fraud_type": np.where(y == 1, "SIM_SWAP", None)})
+    for name, noise in [("a", 1.5), ("b", 0.3)]:
+        d = tmp_path / name
+        d.mkdir()
+        base.assign(score_hybrid=y + rng.normal(0, noise, n)).to_csv(d / "test_predictions.csv", index=False)
+        (d / "phase3_results.json").write_text(json.dumps({"results": {"hybrid": {"threshold": 0.5}}}))
+    res = compare(tmp_path / "a", tmp_path / "b", n_boot=100)
+    assert res["metrics"]["pr_auc_global"]["delta"] > 0
+    assert res["metrics"]["pr_auc_global"]["significant"]
+    assert res["mcnemar"]["a_wrong_b_right"] > res["mcnemar"]["a_right_b_wrong"]
+
+
+def test_card_history_segments(tmp_path):
+    from ml.training.compare_runs import card_history_segments
+    ts = pd.date_range("2025-07-01", periods=25, freq="h")
+    tx = pd.DataFrame({"transaction_id": [f"T{i}" for i in range(25)], "timestamp": ts,
+                       "user_id": "U1", "channel": ["MOBILE_MONEY"] + ["VISA_VIRTUAL"] * 24})
+    tx.to_csv(tmp_path / "tx.csv", index=False)
+    seg = card_history_segments(tmp_path / "tx.csv")
+    assert "T0" not in seg.index                              # Mobile Money : pas de segment carte
+    assert seg["T1"] == "carte_0-4_tx" and seg["T5"] == "carte_0-4_tx"
+    assert seg["T6"] == "carte_5-19_tx" and seg["T21"] == "carte_20+_tx"
+
+
 def test_metrics():
     y = np.array([0, 0, 0, 1, 1])
     s = np.array([0.1, 0.2, 0.3, 0.8, 0.9])
@@ -70,3 +103,48 @@ def test_end_to_end_training_and_reload(prepared, tmp_path):
     reloaded = HybridEnsemble.load(tmp_path)
     np.testing.assert_allclose(reloaded.predict_proba(X, seq_idx, test), p, rtol=1e-5, atol=1e-6)
     assert reloaded.threshold == 0.4
+
+
+def test_ensemble_without_autoencoder_roundtrip(prepared, tmp_path):
+    """Architecture retenue après la sélection de modèle : XGBoost + LSTM, sans autoencodeur.
+    La liste des branches voyage avec les artefacts (metadata.json -> branch_order)."""
+    X, y, seq_idx, split = prepared
+    fit, es = np.where(split == 0)[0], np.where(split == 1)[0]
+    val, test = np.where(split == 2)[0], np.where(split == 3)[0]
+    xgb_model = train_xgboost_branch(X[fit], y[fit], X[es], y[es], n_estimators=50)
+    lstm = train_lstm_branch(X, y, seq_idx, fit, es, epochs=1, hidden_dim=16, log=lambda *_: None)
+
+    ens = HybridEnsemble(xgb_model, lstm)
+    assert ens.branches == ["xgboost", "lstm_attention"]
+    S_val = ens.branch_scores(X, seq_idx, val)
+    assert S_val.shape == (len(val), 2)
+    ens.meta = build_meta_learner().fit(S_val, y[val])
+    p = ens.predict_proba(X, seq_idx, test)
+
+    (tmp_path / "autoencoder_branch.pt").write_bytes(b"ancien")      # reste d'un ancien modèle
+    ens.save(tmp_path)
+    assert not (tmp_path / "autoencoder_branch.pt").exists()
+    reloaded = HybridEnsemble.load(tmp_path)
+    assert reloaded.ae is None and reloaded.branches == ["xgboost", "lstm_attention"]
+    np.testing.assert_allclose(reloaded.predict_proba(X, seq_idx, test), p, rtol=1e-5, atol=1e-6)
+
+
+def test_flat_forest_matches_sklearn_and_explains_exactly():
+    """Forêt aplatie (temps réel) : mêmes probabilités que scikit-learn, et contributions
+    additives exactes (biais + somme = probabilité)."""
+    from sklearn.ensemble import RandomForestClassifier
+
+    from ml.models.flat_forest import FlatForest
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(3000, 8)).astype(np.float32)
+    y = ((X[:, 0] + 0.5 * X[:, 3] ** 2 + rng.normal(scale=0.5, size=3000)) > 1.5).astype(int)
+    rf = RandomForestClassifier(n_estimators=40, min_samples_leaf=3, class_weight="balanced_subsample",
+                                random_state=0).fit(X, y)
+    flat = FlatForest(rf)
+    ref = rf.predict_proba(X[:200])[:, 1]
+    got = np.array([flat.predict_proba_one(x) for x in X[:200]])
+    np.testing.assert_allclose(got, ref, atol=1e-9)
+    for x in X[:20]:
+        p, contrib = flat.explain_one(x)
+        assert abs(flat.bias + contrib.sum() - p) < 1e-9
+    assert np.argmax(np.abs(flat.explain_one(X[np.argmax(ref)])[1])) in (0, 3)   # variables utiles

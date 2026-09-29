@@ -7,6 +7,7 @@ backoffice-api : API des analystes, superviseurs et administrateurs.
     /cases     dossiers d'alerte, verdicts (-> étiquettes pour le réentraînement)
     /reports   KPIs temps réel, séries temporelles, ventilations, performance observée
     /audit     journal inaltérable + vérification de la chaîne de hachage
+    /transactions/{id}/assistant  assistant d'enquête (RAG : cas similaires, procédures, note)
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from shared.utils.metrics import metrics_response
 from app import events
 from app.config import settings
 from app.db import SessionLocal, engine
-from app.routers import audit, auth, cases, reports, transactions
+from app.routers import assistant, audit, auth, cases, operator_feedback, reports, transactions
 from shared.logging.logger_config import configure_logging
 
 configure_logging("backoffice-api")
@@ -41,7 +42,8 @@ app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.CO
                    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 Instrumentator(excluded_handlers=["/metrics", "/health"]).instrument(app)
 
-for r in (auth.router, transactions.router, cases.router, reports.router, audit.router):
+for r in (auth.router, transactions.router, cases.router, reports.router, audit.router, operator_feedback.router,
+          assistant.router):
     app.include_router(r)
 
 

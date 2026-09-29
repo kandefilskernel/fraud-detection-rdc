@@ -2,23 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Système de design « Nuru » — console anti-fraude.
+ * Accent : bleu ciel du drapeau de la RDC. Les couleurs de risque sont réservées aux états
+ * (critique, élevé, moyen, faible) et ne servent jamais d'accent décoratif.
+ * Valeurs HSL sans hsl() : utilisables avec opacité par Tailwind (bg-primary/10).
+ */
 :root {
-  --background: 220 20% 97%;
-  --foreground: 222 30% 12%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 30% 12%;
-  --muted: 220 16% 94%;
-  --muted-foreground: 220 9% 44%;
-  --border: 220 14% 89%;
-  --primary: 212 80% 42%;
+  --background: 216 33% 97%;
+  --surface: 0 0% 100%;
+  --surface-2: 216 30% 96%;
+  --surface-3: 216 24% 92%;
+  --border: 216 20% 89%;
+  --input: 216 18% 84%;
+  --foreground: 222 47% 11%;
+  --muted-foreground: 218 12% 42%;
+  --subtle: 218 12% 58%;
+  --primary: 211 100% 41%;
   --primary-foreground: 0 0% 100%;
-  --sidebar: 222 38% 14%;
-  --sidebar-foreground: 220 20% 88%;
-  --risk-critique: 0 72% 50%;
-  --risk-eleve: 24 90% 50%;
-  --risk-moyen: 42 92% 46%;
-  --risk-faible: 152 55% 38%;
+  --primary-soft: 211 100% 96%;
+  --ring: 211 100% 50%;
+  --star: 46 100% 50%;
+  --shadow: 222 47% 11%;
+  --risk-critique: 4 74% 49%;
+  --risk-eleve: 22 88% 48%;
+  --risk-moyen: 38 92% 42%;
+  --risk-faible: 158 64% 32%;
+  --chart-grid: 216 20% 91%;
+  color-scheme: light;
 }
 
-body { @apply bg-background text-foreground antialiased; }
-.tabular { font-variant-numeric: tabular-nums; }
+.dark {
+  --background: 222 32% 7%;
+  --surface: 222 27% 10%;
+  --surface-2: 222 23% 13%;
+  --surface-3: 222 20% 17%;
+  --border: 222 18% 18%;
+  --input: 222 16% 25%;
+  --foreground: 214 32% 93%;
+  --muted-foreground: 217 14% 63%;
+  --subtle: 217 12% 47%;
+  --primary: 211 100% 62%;
+  --primary-foreground: 222 47% 8%;
+  --primary-soft: 211 60% 16%;
+  --ring: 211 100% 62%;
+  --star: 46 100% 58%;
+  --shadow: 0 0% 0%;
+  --risk-critique: 4 86% 63%;
+  --risk-eleve: 24 94% 60%;
+  --risk-moyen: 40 96% 56%;
+  --risk-faible: 156 58% 48%;
+  --chart-grid: 222 18% 16%;
+  color-scheme: dark;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "ss02";
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  * { @apply border-border; }
+  ::selection { background: hsl(var(--primary) / 0.18); }
+  :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .label-caps { @apply text-2xs font-medium uppercase text-muted-foreground; letter-spacing: 0.06em; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: hsl(var(--input)) transparent; }
+}
+
+/* Graphiques Recharts : textes et grilles aux couleurs du thème */
+.recharts-cartesian-axis-tick-value { fill: hsl(var(--muted-foreground)); font-size: 11px; }
+.recharts-cartesian-grid line { stroke: hsl(var(--chart-grid)); }
+.recharts-legend-item-text { color: hsl(var(--muted-foreground)) !important; font-size: 12px; }

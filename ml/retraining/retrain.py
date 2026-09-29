@@ -39,6 +39,7 @@ import pandas as pd
 
 from ml.features.feature_engineering import FEATURE_NAMES
 from ml.models.autoencoder_branch import train_autoencoder_branch
+from ml.models.baselines import train_random_forest
 from ml.models.hybrid_ensemble import HybridEnsemble
 from ml.models.lstm_attention_branch import train_lstm_branch
 from ml.models.meta_learner import build_meta_learner, meta_coefficients
@@ -107,11 +108,19 @@ def train_challenger(table: pd.DataFrame, seed: int = 42, quick: bool = False):
     xgb_m = train_xgboost_branch(X[idx["fit"]], y[idx["fit"]], X[idx["early_stop"]], y[idx["early_stop"]],
                                  200 if quick else 600, seed)
     fit, es = idx["fit"], idx["early_stop"]
-    ae = train_autoencoder_branch(X[fit][y[fit] == 0], X[es][y[es] == 0], epochs=3 if quick else 30,
-                                  seed=seed, log=lambda m: None)
+    # le challenger reprend l'architecture du champion (branches listées dans metadata.json)
+    champion = json.loads((ARTIFACTS / "metadata.json").read_text(encoding="utf-8"))
+    ae = None
+    if "autoencoder" in champion.get("branch_order", ["autoencoder"]):
+        ae = train_autoencoder_branch(X[fit][y[fit] == 0], X[es][y[es] == 0], epochs=3 if quick else 30,
+                                      seed=seed, log=lambda m: None)
     lstm = train_lstm_branch(X, y, seq, fit, es, epochs=1 if quick else 8, neg_sample_rate=0.3,
                              seed=seed, log=lambda m: None)
-    ens = HybridEnsemble(xgb_m, lstm, ae)
+    tree_kind = champion.get("branch_order", ["xgboost"])[0]
+    tree = xgb_m
+    if tree_kind == "random_forest":
+        tree = train_random_forest(X[np.concatenate([fit, es])], y[np.concatenate([fit, es])], seed)
+    ens = HybridEnsemble(tree, lstm, ae, tree_kind=tree_kind)
     S_val = ens.branch_scores(X, seq, idx["val"])
     ens.meta = build_meta_learner().fit(S_val, y[idx["val"]])
     ens.threshold = best_f1_threshold(y[idx["val"]], ens.meta.predict_proba(S_val)[:, 1])

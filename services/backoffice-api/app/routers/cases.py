@@ -94,6 +94,7 @@ def customer_complaint(transaction_id: str, body: Complaint, db: Session = Depen
     tx.label, tx.labeled_at = 1, now
     db.commit()
     pub.feedback(tx.transaction_id, 1, user.email, c.id)
+    pub.fraud_confirmed(tx, f"plainte:{user.email}")
     pub.audit(user.email, "PLAINTE_CLIENT", "transaction", tx.transaction_id,
               {"case_id": c.id, "decision_modele": tx.action})
     return c
@@ -139,6 +140,10 @@ def update_case(case_id: int, body: CaseUpdate, db: Session = Depends(get_db),
                               ScoredTransaction.tx_time == c.tx_time)
                        .values(label=label, labeled_at=c.resolved_at))
             pub.feedback(c.transaction_id, label, user.email, c.id)
+            if label == 1:   # profil de réputation : marquer les entités de la fraude
+                tx = db.scalar(select(ScoredTransaction).where(ScoredTransaction.transaction_id == c.transaction_id))
+                if tx is not None:
+                    pub.fraud_confirmed(tx, f"analyste:{user.email}")
         elif c.assigned_to is None:
             c.assigned_to = user.id
 

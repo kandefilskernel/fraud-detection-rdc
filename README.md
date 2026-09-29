@@ -4,6 +4,12 @@ Mémoire : « Conception et évaluation d'un modèle IA de profilage comportemen
 de fraude Mobile Money en RDC : extension comparative aux cartes Visa virtuelles ».
 
 Algorithme, architecture et limites : [docs/ARCHITECTURE_CIBLE.md](docs/ARCHITECTURE_CIBLE.md).
+Intégration avec les opérateurs (API, sécurité mTLS/HMAC, idempotence, retours, SIM swap, Visa,
+cadre légal) : [docs/INTEGRATION_OPERATEURS.md](docs/INTEGRATION_OPERATEURS.md).
+Hypothèses des données synthétiques (sourcées ou supposées) : [docs/HYPOTHESES_DONNEES.md](docs/HYPOTHESES_DONNEES.md).
+Assistant d'enquête des analystes (RAG : cas similaires, procédures, note) : [docs/ASSISTANT_ENQUETE.md](docs/ASSISTANT_ENQUETE.md).
+Choix du modèle de production selon les besoins (8 candidats, fraude inconnue, latence) : [docs/SELECTION_MODELE.md](docs/SELECTION_MODELE.md).
+NLP : analyse des SMS d'arnaque signalés par les clients (marquage des numéros d'escrocs) : [docs/NLP_SIGNALEMENTS_SMS.md](docs/NLP_SIGNALEMENTS_SMS.md).
 
 > **Statut : prototype de recherche.** Toutes les données sont synthétiques. Avant tout usage réel :
 > pilote en mode silencieux avec un opérateur, audit de sécurité, validation juridique et
@@ -14,13 +20,14 @@ Algorithme, architecture et limites : [docs/ARCHITECTURE_CIBLE.md](docs/ARCHITEC
 ```
 Opérateurs ──► Nginx /ingest ──► integration-layer ──► scoring-service ──► décision (≈ 20 ms)
  (Vodacom, Airtel,               (adaptateurs)          │ profil Redis + modèle hybride
-  Orange, Visa)                                         │ XGBoost + LSTM-Attention + Autoencodeur
+  Orange, Visa)                                         │ forêt aléatoire + LSTM-Attention + Autoencodeur
                                                         ▼
                                  Kafka (Redpanda) : transactions.scored, fraud.alerts, audit.logs
                                     │ persister → TimescaleDB   │ alerter → dossiers + SMS/e-mail
                                     │ auditor → journal chaîné  │ drift-monitor → Prometheus
                                                         ▼
-            Tableau de bord Next.js  ◄── backoffice-api (JWT, rôles, dossiers, rapports, audit)
+            Tableau de bord Next.js  ◄── backoffice-api (JWT, rôles, dossiers, rapports, audit,
+                                          assistant d'enquête RAG : cas similaires + procédures)
             Grafana / Prometheus / Loki (supervision)   retrainer (champion / challenger)
 ```
 
@@ -53,6 +60,7 @@ python scripts\seed_database.py     # comptes de démonstration (analyste, super
 | Adresse | Contenu |
 |---|---|
 | http://localhost | Tableau de bord (comptes dans `scripts/seed_database.py`, admin dans `.env`) |
+| http://localhost/portefeuille/ | Application mobile de démonstration « portefeuille client » (PIN de démo : 1234) |
 | http://localhost/ingest/v1/transactions/{vodacom\|airtel\|orange\|visa} | API des opérateurs |
 | http://localhost:8001/docs · :8002/docs · :8003/docs | Documentation des API (scoring, intégration, back-office) |
 | http://localhost:3001 | Grafana (admin / `GRAFANA_ADMIN_PASSWORD`) |
@@ -72,6 +80,26 @@ Docker Desktop ajoute ~40 ms) :
 docker run --rm --network fraud-detection-rdc_default -v ${PWD}:/work:ro -w /work --entrypoint sh fraud-rdc/scoring-service:dev -c "pip install -q --user httpx==0.27.0; python scripts/simulate_transactions.py --url http://integration-layer:8002 --rate 40"
 ```
 
+### Démonstration côté client : application « portefeuille »
+Ouvrir http://localhost/portefeuille/ (sur téléphone : même réseau Wi-Fi, adresse IP du PC).
+Trois clients fictifs (Vodacom, Airtel, Orange) ; chaque opération passe par la vraie chaîne
+opérateur → integration-layer → scoring, et l'écran « coulisses » montre la décision du modèle.
+
+| Scénario | Ce qu'on montre |
+|---|---|
+| Envoi à un proche | approuvé en ≈ 20 ms |
+| Envoi à la mule connue | le profil de réputation signale un bénéficiaire déjà lié à des fraudes confirmées |
+| « Envoi par erreur » (un inconnu envoie 5 USD puis réclame 50 USD) | confirmation PIN demandée (règle `RENVOI_TRES_SUPERIEUR_AU_RECU`) |
+| « Signaler ce SMS comme arnaque », puis un autre client paie ce numéro | classification NLP du SMS ; le second client doit confirmer (`BENEFICIAIRE_SIGNALE_PAR_SMS`) |
+| Changement de SIM puis opération sortante | vérification hors SIM (`SIM_RECENTE_OPERATION_SORTANTE`), blocage en cas de vidage du compte |
+| « Je ne reconnais pas cette opération » | plainte → étiquette → profil de réputation mis à jour |
+
+### Assistant d'enquête (analystes)
+Dans le tableau de bord, ouvrir une transaction alertée → **« Préparer la note d'instruction »** :
+cas passés semblables, typologie probable, procédures à suivre et note rédigée. Sans clé
+`ANTHROPIC_API_KEY` dans `.env`, la note est assemblée sans modèle de langage ; avec clé, elle est
+rédigée par Claude (aucun identifiant client transmis). Détails : [docs/ASSISTANT_ENQUETE.md](docs/ASSISTANT_ENQUETE.md).
+
 ### 5. Apprentissage continu
 ```powershell
 python scripts\simulate_feedback.py          # verdicts des analystes + plaintes clients
@@ -84,6 +112,11 @@ le scoring-service le recharge alors à chaud (sans interruption).
 ```powershell
 .\scripts\run_tests.ps1                               # toutes les suites (PostgreSQL requis)
 python -m ml.serving.parity_check --n 2000            # parité entraînement / production
+python -m ml.rag.build_case_archive                   # archive de l'assistant (après réentraînement)
+python -m ml.rag.evaluate_retrieval                   # qualité de la recherche de cas similaires
+python -m ml.training.select_model                    # sélection du modèle selon les besoins (~20 min)
+python -m ml.nlp.scam_sms                             # classifieur des SMS d'arnaque signalés
+python -m ml.nlp.evaluate_sms_rule                    # apport des signalements SMS à la détection
 python scripts\load\build_payloads.py
 docker run --rm --network fraud-detection-rdc_default -v ${PWD}/scripts/load:/load grafana/k6:0.53.0 run /load/k6_ingest.js
 kubectl kustomize infra\kubernetes\overlays\kinshasa  # manifests zone Kinshasa (ou katanga)

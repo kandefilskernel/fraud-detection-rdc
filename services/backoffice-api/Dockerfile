@@ -7,6 +7,7 @@ COPY shared/ shared/
 COPY services/backoffice-api/alembic.ini .
 COPY services/backoffice-api/alembic/ alembic/
 COPY services/backoffice-api/app/ app/
+COPY services/backoffice-api/knowledge/ knowledge/
 USER app
 EXPOSE 8003
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \

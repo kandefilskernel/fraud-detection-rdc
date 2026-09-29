@@ -13,7 +13,7 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from prometheus_client import Counter, Histogram, start_http_server
 
 from shared.kafka_config.topics import (TOPIC_ANALYST_FEEDBACK, TOPIC_AUDIT_LOGS, TOPIC_FRAUD_ALERTS,
-                                        TOPIC_TRANSACTIONS_SCORED)
+                                        TOPIC_FRAUD_CONFIRMED, TOPIC_TRANSACTIONS_SCORED)
 
 from shared.logging.logger_config import configure_logging  # noqa: E402
 
@@ -22,7 +22,7 @@ configure_logging(os.getenv("WORKER_NAME", "worker"))
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
 # audit : 1 partition = ordre total, indispensable au chaînage par hachage
 TOPIC_PARTITIONS = {TOPIC_TRANSACTIONS_SCORED: 3, TOPIC_FRAUD_ALERTS: 3,
-                    TOPIC_AUDIT_LOGS: 1, TOPIC_ANALYST_FEEDBACK: 1}
+                    TOPIC_AUDIT_LOGS: 1, TOPIC_ANALYST_FEEDBACK: 1, TOPIC_FRAUD_CONFIRMED: 1}
 
 PROCESSED = Counter("worker_messages_total", "Messages traités", ["worker", "outcome"])
 BATCH_SECONDS = Histogram("worker_batch_seconds", "Durée de traitement d'un lot", ["worker"])

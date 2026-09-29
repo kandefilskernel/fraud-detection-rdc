@@ -1,0 +1,16 @@
+# Surcharge mTLS : les opérateurs ne peuvent appeler l'API qu'avec leur certificat client.
+#   python scripts/security/generate_dev_pki.py        # certificats de TEST
+#   docker compose -f docker-compose.yml -f docker-compose.mtls.yml up -d
+#   python scripts/simulate_transactions.py --url https://localhost/ingest --mtls-dir infra/nginx/certs
+services:
+  nginx:
+    ports:
+      - "443:443"
+    volumes:
+      - ./infra/nginx/mtls:/etc/nginx/extra:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+  integration-layer:
+    # plus d'accès direct au port 8002 : tout passe par nginx, qui vérifie le certificat
+    ports: !reset []
+    environment:
+      REQUIRE_MTLS: "true"

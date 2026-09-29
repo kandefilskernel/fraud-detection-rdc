@@ -25,16 +25,26 @@ import numpy as np
 import pandas as pd
 import redis
 
-from ml.features.feature_engineering import (FEATURE_NAMES, RAW_DIR, BehavioralFeatureExtractor,
-                                             _period_start)
+from ml.features.feature_engineering import (EXTRACTOR_COLUMNS, FEATURE_NAMES, RAW_DIR,
+                                             BehavioralFeatureExtractor, _period_start, replay_history,
+                                             reported_seconds)
 from ml.serving.feature_store import PREFIX, RedisFeatureStore
+from ml.serving.idempotency import PREFIX as IDEM_PREFIX
+from shared.privacy.pseudonymize import Pseudonymizer
 from shared.schemas.unified_transaction import canonical_id
 
 ARTIFACTS = Path("ml/artifacts")
 
 
+def pseudonymizer_from_env() -> Pseudonymizer | None:
+    """PSEUDONYMIZE_IDS=true + PSEUDONYMIZATION_KEY : mêmes variables que l'integration-layer."""
+    if os.getenv("PSEUDONYMIZE_IDS", "false").lower() not in ("1", "true", "yes"):
+        return None
+    return Pseudonymizer(os.getenv("PSEUDONYMIZATION_KEY", ""))
+
+
 def replay(until: str | None, raw_dir: Path = RAW_DIR, seq_len: int = 10):
-    tx = pd.read_csv(raw_dir / "transactions.csv")
+    tx = pd.read_csv(raw_dir / "transactions.csv", low_memory=False)
     users = pd.read_csv(raw_dir / "users.csv")
     period_start = _period_start(tx["timestamp"], raw_dir)
     tx["timestamp"] = pd.to_datetime(tx["timestamp"])
@@ -42,20 +52,26 @@ def replay(until: str | None, raw_dir: Path = RAW_DIR, seq_len: int = 10):
     if until:
         tx = tx[tx["timestamp"] < pd.Timestamp(until)].reset_index(drop=True)
 
-    work = tx[["user_id", "tx_type", "channel", "amount_usd", "balance_before_usd", "status",
-               "device_id", "device_type", "access_channel", "ip_country", "location_province",
-               "counterparty_id", "agent_id", "merchant_id", "merchant_category",
-               "merchant_country"]].copy()
+    work = tx[EXTRACTOR_COLUMNS].copy()
     work = work.astype(object).where(work.notna(), None)
     for col in ("user_id", "device_id", "counterparty_id", "agent_id", "merchant_id"):
         work[col] = work[col].map(canonical_id)
+    pseudo = pseudonymizer_from_env()
+    if pseudo is not None:
+        # même pseudonymisation que l'integration-layer en temps réel (plateforme mutualisée)
+        work = pd.DataFrame([pseudo.transaction(r) for r in work.to_dict("records")], columns=work.columns)
+        users = users.assign(user_id=users["user_id"].map(lambda v: pseudo(canonical_id(v))),
+                             wallet_id=users["wallet_id"].map(lambda v: pseudo(canonical_id(v))))
     work["ts"] = (tx["timestamp"] - pd.Timestamp("1970-01-01")) / pd.Timedelta(seconds=1)
     work["hour"] = tx["timestamp"].dt.hour
     work["weekday"] = tx["timestamp"].dt.weekday
     work["day"] = tx["timestamp"].dt.day
 
     ext = BehavioralFeatureExtractor(users, period_start)
-    rows = [ext.process(r) for r in work.to_dict("records")]
+    # transactions ET signalements de fraude, dans l'ordre du temps (comme à l'entraînement)
+    until_s = (pd.Timestamp(until) - pd.Timestamp("1970-01-01")) / pd.Timedelta(seconds=1) if until else None
+    rows = replay_history(work.to_dict("records"), lambda r: ext, tx["transaction_id"].to_numpy(),
+                          reported_seconds(tx), until_s=until_s)
     X = pd.DataFrame(rows, columns=FEATURE_NAMES).astype(np.float32).to_numpy()
 
     prep = json.loads((ARTIFACTS / "preprocessing.json").read_text(encoding="utf-8"))
@@ -63,7 +79,7 @@ def replay(until: str | None, raw_dir: Path = RAW_DIR, seq_len: int = 10):
     Xs = np.clip(scaler.transform(X), -prep["clip"], prep["clip"]).astype(np.float32)
 
     last = defaultdict(lambda: deque(maxlen=seq_len - 1))
-    for i, uid in enumerate(tx["user_id"].to_numpy()):
+    for i, uid in enumerate(work["user_id"].to_numpy()):
         last[uid].append(i)
     sequences = {uid: [Xs[i] for i in idx] for uid, idx in last.items()}
     return ext, sequences, period_start, len(tx)
@@ -94,13 +110,17 @@ def main():
     ext, sequences, period_start, n = replay(until)
     print(f"    {n:,} transactions rejouées en {time.perf_counter() - t0:.0f} s")
 
-    old = list(r.scan_iter(f"{PREFIX}:*", count=5000))
+    # les profils repartent d'un état passé : les décisions mémorisées pour l'idempotence
+    # (idem:*) ne correspondent plus, on les efface aussi (sinon une démo rejouée serait
+    # entièrement traitée comme des renvois déjà scorés)
+    old = list(r.scan_iter(f"{PREFIX}:*", count=5000)) + list(r.scan_iter(f"{IDEM_PREFIX}:*", count=5000))
     for i in range(0, len(old), 5000):
         r.delete(*old[i:i + 5000])
     store = RedisFeatureStore(r, period_start.timestamp())
     stats = store.bulk_load(ext, sequences)
     r.set(f"{PREFIX}:meta", json.dumps({"seeded_until": str(until), "period_start": str(period_start),
-                                        "n_transactions": n, "seeded_at": time.strftime("%Y-%m-%dT%H:%M:%S")}))
+                                        "n_transactions": n, "seeded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                        "pseudonymized": pseudonymizer_from_env() is not None}))
     print(f"[OK] Redis amorcé en {time.perf_counter() - t0:.0f} s : {stats}")
 
 

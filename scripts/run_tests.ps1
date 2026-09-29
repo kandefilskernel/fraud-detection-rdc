@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $suites = @("ml/tests", "services/scoring-service/tests", "services/integration-layer/tests",
-            "services/backoffice-api/tests", "services/workers/tests")
+            "services/backoffice-api/tests", "services/workers/tests", "services/wallet-demo/tests")
 $failed = @()
 foreach ($s in $suites) {
     Write-Host "`n=== $s ===" -ForegroundColor Cyan

@@ -8,62 +8,136 @@
     "mm_fraud_rate": 0.012,
     "card_fraud_rate": 0.025,
     "mule_account_rate": 0.01,
-    "legit_device_change_rate": 0.04,
     "visa_adoption_multiplier": 2.5,
+    "legit_device_change_rate": 0.15,
+    "shared_device_rate": 0.15,
+    "borrowed_device_rate": 0.02,
+    "card_new_browser_rate": 0.1,
+    "legit_vpn_rate": 0.1,
+    "legit_full_cashout_rate": 0.06,
+    "legit_burst_rate": 0.08,
+    "legit_new_recipient_rate": 0.2,
+    "legit_micro_burst_users": 0.15,
+    "legit_tontine_rate": 0.25,
+    "fraud_victim_device_rate": 0.35,
+    "fraud_fresh_device_rate": 0.45,
+    "fraud_local_proxy_rate": 0.45,
+    "fraud_night_bias_scale": 0.5,
+    "friendly_fraud_rate": 0.003,
+    "report_prob": {
+      "SIM_SWAP": 0.6,
+      "ACCOUNT_TAKEOVER": 0.5,
+      "SOCIAL_ENGINEERING": 0.25,
+      "AGENT_FRAUD": 0.35,
+      "SMURFING": 0.3,
+      "CARD_TESTING": 0.2,
+      "CNP_FRAUD": 0.5,
+      "TOPUP_DRAIN": 0.5
+    },
+    "report_amount_effect": 0.6,
+    "report_delay_median_days": {
+      "SIM_SWAP": 1.0,
+      "ACCOUNT_TAKEOVER": 2.0,
+      "SOCIAL_ENGINEERING": 2.0,
+      "AGENT_FRAUD": 5.0,
+      "SMURFING": 21.0,
+      "CARD_TESTING": 10.0,
+      "CNP_FRAUD": 12.0,
+      "TOPUP_DRAIN": 3.0,
+      "FRIENDLY_FRAUD": 25.0
+    },
+    "report_delay_sigma": 0.8,
+    "report_delay_max_days": 120.0,
+    "mule_pool_size": 400,
+    "mule_lifespan_days": 14.0,
+    "fresh_mule_rate": 0.2,
+    "fraud_device_pool_size": 400,
+    "fraud_device_lifespan_days": 30.0,
+    "agent_compromise_days": 21.0,
     "n_agents": 800,
     "n_mm_merchants": 600,
     "n_card_merchants": 300,
     "output_dir": "ml/data/raw"
   },
   "summary": {
-    "n_transactions": 339785,
+    "n_transactions": 386828,
     "period": [
-      "2025-06-01 00:00:13",
-      "2025-11-27 23:49:46"
+      "2025-06-01 00:01:37",
+      "2025-11-27 23:59:40"
     ],
-    "fraud_rate_global": 0.01412,
+    "fraud_rate_global": 0.00548,
     "by_channel": {
       "MOBILE_MONEY": {
-        "n": 313235,
-        "fraud_rate": 0.0126
+        "n": 359212,
+        "fraud_rate": 0.00513
       },
       "VISA_VIRTUAL": {
-        "n": 26550,
-        "fraud_rate": 0.03209
+        "n": 27616,
+        "fraud_rate": 0.00992
       }
     },
     "fraud_transactions_by_type": {
-      "SIM_SWAP": 1186,
-      "SOCIAL_ENGINEERING": 986,
-      "SMURFING": 709,
-      "ACCOUNT_TAKEOVER": 592,
-      "AGENT_FRAUD": 474,
-      "CNP_FRAUD": 341,
-      "CARD_TESTING": 298,
-      "TOPUP_DRAIN": 213
+      "SIM_SWAP": 789,
+      "SMURFING": 332,
+      "ACCOUNT_TAKEOVER": 301,
+      "SOCIAL_ENGINEERING": 257,
+      "AGENT_FRAUD": 165,
+      "CNP_FRAUD": 105,
+      "TOPUP_DRAIN": 87,
+      "FRIENDLY_FRAUD": 44,
+      "CARD_TESTING": 38
     },
     "fraud_episodes_by_type": {
-      "ACCOUNT_TAKEOVER": 198,
-      "AGENT_FRAUD": 307,
-      "CARD_TESTING": 35,
-      "CNP_FRAUD": 177,
-      "SIM_SWAP": 339,
-      "SMURFING": 70,
-      "SOCIAL_ENGINEERING": 520,
-      "TOPUP_DRAIN": 71
+      "ACCOUNT_TAKEOVER": 95,
+      "AGENT_FRAUD": 109,
+      "CARD_TESTING": 5,
+      "CNP_FRAUD": 53,
+      "FRIENDLY_FRAUD": 44,
+      "SIM_SWAP": 228,
+      "SMURFING": 30,
+      "SOCIAL_ENGINEERING": 133,
+      "TOPUP_DRAIN": 30
     },
-    "failure_rate_legit": 0.01688,
-    "failure_rate_fraud": 0.11607,
+    "failure_rate_legit": 0.02743,
+    "failure_rate_fraud": 0.06516,
     "tx_type_distribution": {
-      "P2P_RECEIVE": 74740,
-      "P2P_SEND": 68597,
-      "CASH_IN": 51992,
-      "CASH_OUT": 46821,
-      "AIRTIME": 27774,
-      "MERCHANT_PAYMENT": 27153,
-      "BILL_PAYMENT": 16158,
-      "CARD_PURCHASE": 15151,
-      "CARD_TOPUP": 11399
+      "P2P_RECEIVE": 84965,
+      "P2P_SEND": 84887,
+      "CASH_IN": 54070,
+      "CASH_OUT": 46074,
+      "AIRTIME": 37992,
+      "MERCHANT_PAYMENT": 35624,
+      "CARD_PURCHASE": 16502,
+      "BILL_PAYMENT": 15600,
+      "CARD_TOPUP": 11114
+    }
+  },
+  "label_noise": {
+    "UNREPORTED_FRAUD": 2924,
+    "FRIENDLY_FRAUD": 44
+  },
+  "reporting": {
+    "episodes": 1810,
+    "reported_share": 0.3773,
+    "reported_share_by_type": {
+      "ACCOUNT_TAKEOVER": 0.452,
+      "AGENT_FRAUD": 0.305,
+      "CARD_TESTING": 0.172,
+      "CNP_FRAUD": 0.405,
+      "SIM_SWAP": 0.608,
+      "SMURFING": 0.4,
+      "SOCIAL_ENGINEERING": 0.231,
+      "TOPUP_DRAIN": 0.536
+    },
+    "median_delay_days_by_type": {
+      "ACCOUNT_TAKEOVER": 2.11,
+      "AGENT_FRAUD": 5.33,
+      "CARD_TESTING": 9.33,
+      "CNP_FRAUD": 14.16,
+      "SIM_SWAP": 1.08,
+      "SMURFING": 23.2,
+      "SOCIAL_ENGINEERING": 1.85,
+      "TOPUP_DRAIN": 2.44
     }
   },
   "data_dictionary": {
@@ -91,21 +165,28 @@
     "device_type": "smartphone ou feature_phone",
     "ip_country": "Pays de l'adresse IP (accès APP uniquement)",
     "location_province": "Province d'où la transaction est initiée",
-    "is_fraud": "CIBLE : 1 si la transaction fait partie d'un épisode de fraude (tentatives échouées incluses)",
-    "fraud_type": "Typologie de fraude (analyse uniquement, jamais en entrée du modèle)",
-    "fraud_episode_id": "Regroupe les transactions d'un même épisode (analyse uniquement)"
+    "is_fraud": "CIBLE : étiquette connue de l'opérateur, 1 si la transaction fait partie d'un épisode de fraude signalé (tentatives échouées incluses). Bruitée comme dans la réalité : vérité terrain dans label_noise.csv",
+    "fraud_type": "Typologie de fraude (analyse uniquement, jamais en entrée du modèle) ; FRIENDLY_FRAUD = achat légitime contesté par le titulaire",
+    "fraud_episode_id": "Regroupe les transactions d'un même épisode (analyse uniquement)",
+    "fraud_reported_at": "Date à laquelle l'opérateur apprend la fraude (plainte, enquête, contestation). Ne sert qu'à rejouer les signalements dans l'ordre du temps (profil de réputation) ; jamais en entrée du modèle"
   },
   "hidden_labels": {
     "transactions.csv": [
       "is_fraud (cible)",
       "fraud_type",
-      "fraud_episode_id"
+      "fraud_episode_id",
+      "fraud_reported_at"
     ],
     "users.csv": [
       "is_mule_account"
     ],
     "agents.csv": [
-      "is_compromised"
+      "is_compromised",
+      "compromised_from_s",
+      "compromised_until_s"
+    ],
+    "label_noise.csv": [
+      "fichier entier : vérité terrain des lignes à étiquette bruitée"
     ]
   }
 }

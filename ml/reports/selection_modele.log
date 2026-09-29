@@ -1,0 +1,43 @@
+Scores des branches actuelles (XGBoost, LSTM, autoencodeur)...
+XGBoost xgb_sans_ponderation...
+    itérations retenues : 289  PR-AUC val : 0.4883
+XGBoost xgb_ponderation_racine...
+    itérations retenues : 198  PR-AUC val : 0.4981
+XGBoost xgb_profond...
+    itérations retenues : 354  PR-AUC val : 0.5211
+Meilleure configuration XGBoost sur la validation : xgb_profond
+Forêt aléatoire (train + early_stop, comme la référence de la phase 3)...
+Hybride actuel (XGB + LSTM + AE)     val PR-AUC 0.4610 (vérité 0.9098) | test vérité 0.9365 | p99 6.9 ms | explication 7.17 ms
+XGB actuel + LSTM                    val PR-AUC 0.4722 (vérité 0.9084) | test vérité 0.9344 | p99 6.1 ms | explication 7.17 ms
+XGB optimisé + LSTM                  val PR-AUC 0.4964 (vérité 0.9128) | test vérité 0.9367 | p99 6.1 ms | explication 17.43 ms
+XGB optimisé + LSTM + AE             val PR-AUC 0.4852 (vérité 0.9116) | test vérité 0.9373 | p99 6.8 ms | explication 17.43 ms
+Forêt aléatoire + LSTM               val PR-AUC 0.4764 (vérité 0.9376) | test vérité 0.9550 | p99 42.3 ms | explication None ms
+Forêt aléatoire seule                val PR-AUC 0.5089 (vérité 0.9348) | test vérité 0.9435 | p99 37.1 ms | explication None ms
+XGB optimisé seul                    val PR-AUC 0.5211 (vérité 0.8779) | test vérité 0.8947 | p99 0.9 ms | explication 17.43 ms
+LSTM seul                            val PR-AUC 0.4338 (vérité 0.8726) | test vérité 0.9007 | p99 5.2 ms | explication 0.0 ms
+
+Candidats éligibles (B3, B4) : ['Hybride actuel (XGB + LSTM + AE)', 'XGB actuel + LSTM', 'LSTM seul']
+À moins de 0.005 du meilleur sur la validation : ['XGB actuel + LSTM']
+CHOIX : XGB actuel + LSTM
+Test (vérité) XGB actuel + LSTM − hybride actuel : {'delta': -0.0021, 'ci95': [-0.0046, 0.0], 'significant': False}
+Test (vérité) Forêt aléatoire seule − hybride actuel : {'delta': 0.007, 'ci95': [-0.0036, 0.0173], 'significant': False}
+Test (vérité) Forêt aléatoire + LSTM − hybride actuel : {'delta': 0.0185, 'ci95': [0.0118, 0.0258], 'significant': True}
+Fraude inconnue : entraînement sans SIM_SWAP...
+    SIM_SWAP: {'n_test': 191, 'xgb_sans_T': (0.812, 0.0093), 'xgb_sans_T_plus_ae': (0.838, 0.0099), 'ae_seul': (0.335, 0.0119), 'reference_xgb_avec_T': (0.995, 0.0101)}
+Fraude inconnue : entraînement sans ACCOUNT_TAKEOVER...
+    ACCOUNT_TAKEOVER: {'n_test': 109, 'xgb_sans_T': (0.688, 0.0096), 'xgb_sans_T_plus_ae': (0.697, 0.0105), 'ae_seul': (0.138, 0.0119), 'reference_xgb_avec_T': (0.899, 0.0101)}
+Fraude inconnue : entraînement sans SOCIAL_ENGINEERING...
+    SOCIAL_ENGINEERING: {'n_test': 197, 'xgb_sans_T': (0.482, 0.0088), 'xgb_sans_T_plus_ae': (0.503, 0.0089), 'ae_seul': (0.416, 0.0119), 'reference_xgb_avec_T': (0.863, 0.0101)}
+Fraude inconnue : entraînement sans AGENT_FRAUD...
+    AGENT_FRAUD: {'n_test': 173, 'xgb_sans_T': (0.156, 0.01), 'xgb_sans_T_plus_ae': (0.173, 0.0105), 'ae_seul': (0.347, 0.0119), 'reference_xgb_avec_T': (0.879, 0.0101)}
+Fraude inconnue : entraînement sans SMURFING...
+    SMURFING: {'n_test': 192, 'xgb_sans_T': (0.172, 0.0105), 'xgb_sans_T_plus_ae': (0.188, 0.0105), 'ae_seul': (0.339, 0.0119), 'reference_xgb_avec_T': (0.969, 0.0101)}
+Fraude inconnue : entraînement sans CARD_TESTING...
+    CARD_TESTING: {'n_test': 64, 'xgb_sans_T': (0.234, 0.01), 'xgb_sans_T_plus_ae': (0.266, 0.01), 'ae_seul': (0.625, 0.0119), 'reference_xgb_avec_T': (0.531, 0.0101)}
+Fraude inconnue : entraînement sans CNP_FRAUD...
+    CNP_FRAUD: {'n_test': 52, 'xgb_sans_T': (0.808, 0.0095), 'xgb_sans_T_plus_ae': (0.827, 0.01), 'ae_seul': (0.462, 0.0119), 'reference_xgb_avec_T': (0.923, 0.0101)}
+Fraude inconnue : entraînement sans TOPUP_DRAIN...
+    TOPUP_DRAIN: {'n_test': 36, 'xgb_sans_T': (0.889, 0.0095), 'xgb_sans_T_plus_ae': (0.889, 0.0097), 'ae_seul': (0.222, 0.0119), 'reference_xgb_avec_T': (0.972, 0.0101)}
+
+Rapport : ml\reports\selection_modele.json  (18.7 min)
+EXIT 0

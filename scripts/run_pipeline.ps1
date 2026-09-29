@@ -10,7 +10,10 @@ param(
     [int]$Days = 180,
     [double]$VisaAdoption = 2.5
 )
-$ErrorActionPreference = "Stop"
+# "Continue" et non "Stop" : sous Windows PowerShell 5.1, les journaux Python écrits sur stderr
+# deviendraient des erreurs bloquantes dès que la sortie est redirigée (> log.txt). Les échecs
+# réels sont détectés par $LASTEXITCODE après chaque étape.
+$ErrorActionPreference = "Continue"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 if (-not $SkipGeneration) {

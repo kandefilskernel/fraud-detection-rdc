@@ -20,6 +20,17 @@ Clés Redis (préfixe fs:) :
     fs:agent:{agent}  ZSET  titulaire -> dernier passage (fenêtre glissante 24 h)
     fs:seq:{uid}      LIST  vecteurs normalisés des SEQ_LEN-1 dernières transactions (LSTM)
     fs:lock:{uid}     verrou court : deux transactions d'un même client sont traitées en série
+    C1 — profil des portefeuilles contreparties (tous clients, tous opérateurs) :
+    fs:wallet:{w}     JSON  titulaire et ancienneté si le portefeuille est un client KYC
+    fs:wfs:{w}        texte date de première apparition (SET NX : écrite une seule fois)
+    fs:win:{w}        LIST  envois reçus par ce portefeuille (RPUSH + LTRIM : ajout atomique,
+                            pas de mise à jour perdue quand deux clients paient la même mule)
+    fs:wout:{w}       LIST  envois émis par ce portefeuille vers des clients
+    Profil de réputation (fraudes CONFIRMÉES, alimenté par le topic Kafka fraud.confirmed) :
+    fs:rep:{type}:{id} ZSET transaction frauduleuse -> horodatage ; type = dev | cp | agent |
+                            merchant | user
+    Signalements de SMS d'arnaque (NLP, ml/nlp) :
+    fs:scam:{w}       ZSET  signalement -> horodatage : le numéro w a été désigné comme escroc
 """
 from __future__ import annotations
 
@@ -31,7 +42,8 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from ml.features.feature_engineering import DAY, BehavioralFeatureExtractor, _UserState
+from ml.features.feature_engineering import (DAY, P2P_TYPES, REPUTATION_KINDS, WALLET_MAX_EVENTS,
+                                             BehavioralFeatureExtractor, _UserState, _WalletState)
 
 PREFIX = "fs"
 DEFAULT_PROFILE = {  # client inconnu du référentiel KYC : profil prudent
@@ -51,6 +63,7 @@ def user_state_to_json(st: _UserState) -> str:
         "merchants": sorted(st.merchants), "night_count": st.night_count,
         "hour_sin_sum": st.hour_sin_sum, "hour_cos_sum": st.hour_cos_sum,
         "last_topup_ts": st.last_topup_ts, "last_topup_amt": st.last_topup_amt,
+        "inflows": [[t, c, a, int(f)] for t, c, a, f in st.inflows],
     }, separators=(",", ":"))
 
 
@@ -65,7 +78,28 @@ def user_state_from_json(raw: str | bytes) -> _UserState:
         merchants=set(d["merchants"]), night_count=d["night_count"],
         hour_sin_sum=d["hour_sin_sum"], hour_cos_sum=d["hour_cos_sum"],
         last_topup_ts=d["last_topup_ts"], last_topup_amt=d["last_topup_amt"],
+        # .get : profils écrits avant C1 (pas encore de réceptions mémorisées)
+        inflows=deque((t, c, a, bool(f)) for t, c, a, f in d.get("inflows", [])),
     )
+
+
+def wallet_in_event_to_json(e: tuple) -> str:
+    t, u, a, first, op = e
+    return json.dumps([t, u, a, int(first), op], separators=(",", ":"))
+
+
+def wallet_out_event_to_json(e: tuple) -> str:
+    return json.dumps(list(e), separators=(",", ":"))
+
+
+def wallet_state_from_redis(first_seen, in_raw: list, out_raw: list) -> _WalletState:
+    ws = _WalletState(first_seen=float(first_seen) if first_seen is not None else None)
+    for raw in in_raw:
+        t, u, a, first, op = json.loads(raw)
+        ws.inflows.append((t, u, a, bool(first), op))
+    for raw in out_raw:
+        ws.outflows.append(tuple(json.loads(raw)))
+    return ws
 
 
 _RELEASE_LUA = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
@@ -100,7 +134,7 @@ class RedisFeatureStore:
     # ------------------------------------------------------------------ lecture / écriture
     def _load(self, tx: dict) -> tuple[BehavioralFeatureExtractor, list[np.ndarray], bool]:
         uid, dev = tx["user_id"], tx["device_id"]
-        cp = tx["counterparty_id"] if tx["tx_type"] in ("P2P_SEND", "P2P_RECEIVE") else None
+        cp = tx["counterparty_id"] if tx["tx_type"] in P2P_TYPES else None
         agent = tx["agent_id"] if isinstance(tx["agent_id"], str) else None
 
         p = self.r.pipeline(transaction=False)
@@ -110,7 +144,20 @@ class RedisFeatureStore:
         p.smembers(f"{PREFIX}:cp:{cp}") if cp else p.echo("")
         p.zrange(f"{PREFIX}:agent:{agent}", 0, -1, withscores=True) if agent else p.echo("")
         p.lrange(f"{PREFIX}:seq:{uid}", 0, -1)
-        prof_raw, user_raw, dev_users, cp_users, agent_rows, seq_raw = p.execute()
+        if cp:  # C1 : profil du portefeuille contrepartie (même aller-retour Redis)
+            p.get(f"{PREFIX}:wallet:{cp}")
+            p.get(f"{PREFIX}:wfs:{cp}")
+            p.lrange(f"{PREFIX}:win:{cp}", 0, -1)
+            p.lrange(f"{PREFIX}:wout:{cp}", 0, -1)
+        # réputation des entités de la transaction (fraudes signalées)
+        merchant = tx["merchant_id"] if isinstance(tx.get("merchant_id"), str) else None
+        rep_keys = [(k, v) for k, v in (("dev", dev), ("cp", cp), ("agent", agent), ("merchant", merchant),
+                                        ("user", uid)) if v]
+        for kind, key in rep_keys:
+            p.zrange(f"{PREFIX}:rep:{kind}:{key}", 0, -1, withscores=True)
+        res = p.execute()
+        prof_raw, user_raw, dev_users, cp_users, agent_rows, seq_raw = res[:6]
+        rep_rows = res[len(res) - len(rep_keys):]
 
         ext = BehavioralFeatureExtractor.__new__(BehavioralFeatureExtractor)
         ext.period_start_s = self.period_start_s
@@ -121,6 +168,20 @@ class RedisFeatureStore:
         ext.counterparty_users = {cp: {_s(u) for u in cp_users}} if cp else {}
         ext.agent_recent = ({agent: deque(sorted(((s, _s(u)) for u, s in agent_rows)))}
                             if agent else {})
+        ext.wallet_owner, ext.wallets = {}, {}
+        ext.reputation = {k: {} for k in REPUTATION_KINDS}
+        for (kind, key), rows in zip(rep_keys, rep_rows):
+            if rows:
+                ext.reputation[kind][key] = {_s(m): float(s) for m, s in rows}
+        if cp:
+            owner_raw, first_seen, win_raw, wout_raw = res[6:10]
+            if owner_raw is not None:
+                owner = json.loads(owner_raw)
+                ext.wallet_owner[cp] = owner["user_id"]
+                if owner["user_id"] != uid:
+                    ext.profiles[owner["user_id"]] = {"account_age_days": owner["account_age_days"]}
+            if first_seen is not None:
+                ext.wallets[cp] = wallet_state_from_redis(_s(first_seen), win_raw, wout_raw)
         seq = [np.frombuffer(b, dtype=np.float32) for b in seq_raw]
         return ext, seq, known
 
@@ -129,8 +190,18 @@ class RedisFeatureStore:
         p = self.r.pipeline(transaction=True)
         p.set(f"{PREFIX}:user:{uid}", user_state_to_json(ext.users[uid]))
         p.sadd(f"{PREFIX}:dev:{dev}", uid)
-        if tx["tx_type"] in ("P2P_SEND", "P2P_RECEIVE") and tx["counterparty_id"]:
-            p.sadd(f"{PREFIX}:cp:{tx['counterparty_id']}", uid)
+        cp = tx["counterparty_id"]
+        if tx["tx_type"] in P2P_TYPES and cp:
+            p.sadd(f"{PREFIX}:cp:{cp}", uid)
+            # C1 : l'événement que update() vient d'ajouter au profil du portefeuille
+            ws = ext.wallets[cp]
+            p.set(f"{PREFIX}:wfs:{cp}", ws.first_seen, nx=True)
+            if tx["tx_type"] == "P2P_SEND":
+                key, event = f"{PREFIX}:win:{cp}", wallet_in_event_to_json(ws.inflows[-1])
+            else:
+                key, event = f"{PREFIX}:wout:{cp}", wallet_out_event_to_json(ws.outflows[-1])
+            p.rpush(key, event)
+            p.ltrim(key, -WALLET_MAX_EVENTS, -1)
         if isinstance(tx["agent_id"], str):
             key = f"{PREFIX}:agent:{tx['agent_id']}"
             p.zadd(key, {uid: ts})
@@ -139,6 +210,30 @@ class RedisFeatureStore:
         p.rpush(seq_key, x_scaled.astype(np.float32).tobytes())
         p.ltrim(seq_key, -(self.seq_len - 1), -1)
         p.execute()
+
+    # ------------------------------------------------------------------ réputation
+    def apply_report(self, event: dict) -> int:
+        """Fraude confirmée (analyste, plainte, retour d'opérateur) : marque ses entités.
+        Même règle que BehavioralFeatureExtractor.report ; ZADD : un signalement répété ne
+        compte qu'une fois. Renvoie le nombre d'entités mises à jour."""
+        entities = BehavioralFeatureExtractor.report_entities(event)
+        p = self.r.pipeline(transaction=False)
+        for kind, key in entities:
+            p.zadd(f"{PREFIX}:rep:{kind}:{key}", {str(event["transaction_id"]): float(event["ts"])})
+        p.execute()
+        return len(entities)
+
+    # ------------------------------------------------------------------ signalements SMS (NLP)
+    def add_scam_report(self, wallet: str, report_id: str, ts: float) -> None:
+        """Un client a signalé un SMS d'arnaque désignant ce numéro (ZADD : un même signalement
+        reçu deux fois ne compte qu'une fois)."""
+        self.r.zadd(f"{PREFIX}:scam:{wallet}", {str(report_id): float(ts)})
+
+    def scam_report_count(self, wallet: str | None, ts: float, window_s: float = 30 * DAY) -> int:
+        """Signalements reçus AVANT ts, dans la fenêtre (30 jours par défaut)."""
+        if not wallet:
+            return 0
+        return int(self.r.zcount(f"{PREFIX}:scam:{wallet}", ts - window_s, ts))
 
     # ------------------------------------------------------------------ API
     def compute(self, tx: dict, scale_fn, decide_fn=None) -> dict:
@@ -209,5 +304,36 @@ class RedisFeatureStore:
                 if vecs:
                     p.rpush(key, *[v.astype(np.float32).tobytes() for v in vecs[-(self.seq_len - 1):]])
             p.execute()
+        # C1 : portefeuilles des clients KYC et profil de chaque portefeuille contrepartie
+        for part in chunks(extractor.wallet_owner.items()):
+            p = r.pipeline(transaction=False)
+            for wallet, owner in part:
+                age = extractor.profiles.get(owner, {}).get("account_age_days", 0)
+                p.set(f"{PREFIX}:wallet:{wallet}", json.dumps(
+                    {"user_id": owner, "account_age_days": age.item() if hasattr(age, "item") else age}))
+            p.execute()
+        for part in chunks(extractor.wallets.items()):
+            p = r.pipeline(transaction=False)
+            for wallet, ws in part:
+                p.delete(f"{PREFIX}:win:{wallet}", f"{PREFIX}:wout:{wallet}")
+                p.set(f"{PREFIX}:wfs:{wallet}", ws.first_seen)
+                if ws.inflows:
+                    p.rpush(f"{PREFIX}:win:{wallet}", *[wallet_in_event_to_json(e) for e in ws.inflows])
+                if ws.outflows:
+                    p.rpush(f"{PREFIX}:wout:{wallet}", *[wallet_out_event_to_json(e) for e in ws.outflows])
+            p.execute()
+        # réputation : fraudes signalées pendant la période rejouée
+        n_rep = 0
+        for kind, entities in extractor.reputation.items():
+            for part in chunks(entities.items()):
+                p = r.pipeline(transaction=False)
+                for key, frauds in part:
+                    rk = f"{PREFIX}:rep:{kind}:{key}"
+                    p.delete(rk)
+                    if frauds:
+                        p.zadd(rk, frauds)
+                        n_rep += 1
+                p.execute()
         return {"users": n, "devices": len(extractor.device_users),
-                "counterparties": len(extractor.counterparty_users), "agents": len(extractor.agent_recent)}
+                "counterparties": len(extractor.counterparty_users), "agents": len(extractor.agent_recent),
+                "wallets": len(extractor.wallets), "reputation_entities": n_rep}

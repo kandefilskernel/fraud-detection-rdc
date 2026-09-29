@@ -1,0 +1,1655 @@
+{
+  "config": {
+    "seed": 42,
+    "xgb_estimators": 600,
+    "lstm_epochs": 8,
+    "lstm_neg_sample_rate": 0.3,
+    "ae_epochs": 30,
+    "skip_baselines": false,
+    "use_mlflow": true,
+    "exclude_groups": [
+      "reputation"
+    ],
+    "reports_dir": "ml/reports/sans_reputation",
+    "save_artifacts": false,
+    "processed_dir": "ml\\data\\processed"
+  },
+  "training_seconds": 369,
+  "features_used": [
+    "log_amount_usd",
+    "amount_zscore_user",
+    "amount_ratio_user_mean",
+    "amount_to_balance",
+    "is_near_full_drain",
+    "amount_to_kyc_limit",
+    "log_balance_before",
+    "tx_count_1h",
+    "tx_count_24h",
+    "tx_count_7d",
+    "debit_count_1h",
+    "log_debit_sum_24h",
+    "log_secs_since_last_tx",
+    "failed_count_24h",
+    "is_new_device",
+    "log_device_prior_uses",
+    "n_devices_user",
+    "device_n_users",
+    "is_smartphone",
+    "access_app",
+    "access_ussd",
+    "access_agent",
+    "is_foreign_ip",
+    "is_new_province",
+    "is_away_from_home",
+    "is_new_counterparty",
+    "counterparty_n_users",
+    "is_new_agent",
+    "agent_n_users_24h",
+    "is_new_merchant",
+    "is_high_risk_merchant",
+    "is_foreign_merchant",
+    "hour_sin",
+    "hour_cos",
+    "is_night",
+    "user_night_ratio",
+    "night_unusual",
+    "hour_deviation_user",
+    "is_weekend",
+    "is_month_end",
+    "log_history_days",
+    "log_user_tx_count",
+    "is_card",
+    "log_mins_since_topup",
+    "purchase_to_topup_ratio",
+    "kyc_level",
+    "log_account_age_days",
+    "log_monthly_income",
+    "has_visa_virtual",
+    "type_P2P_SEND",
+    "type_P2P_RECEIVE",
+    "type_CASH_IN",
+    "type_CASH_OUT",
+    "type_MERCHANT_PAYMENT",
+    "type_AIRTIME",
+    "type_BILL_PAYMENT",
+    "type_CARD_TOPUP",
+    "type_CARD_PURCHASE",
+    "cp_is_customer",
+    "cp_log_age_days",
+    "cp_in_senders_7d",
+    "cp_in_new_ratio_7d",
+    "cp_in_operators_7d",
+    "cp_out_receivers_7d",
+    "cp_log_in_amount_7d",
+    "refund_ratio_to_cp",
+    "log_mins_since_received_from_cp",
+    "in_senders_24h",
+    "in_new_senders_24h",
+    "log_inflow_24h",
+    "passthrough_ratio"
+  ],
+  "results": {
+    "hybrid": {
+      "model": "Hybride (XGB + LSTM + AE)",
+      "threshold": 0.19318264128975202,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4928,
+        "roc_auc": 0.9923,
+        "recall_at_1pct_fpr": 0.8325,
+        "precision": 0.4099,
+        "recall": 0.6963,
+        "f1": 0.516,
+        "false_positive_rate": 0.00667
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.5269,
+          "roc_auc": 0.9947,
+          "recall_at_1pct_fpr": 0.9038,
+          "precision": 0.4422,
+          "recall": 0.7026,
+          "f1": 0.5428,
+          "false_positive_rate": 0.00572
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.3197,
+          "roc_auc": 0.9294,
+          "recall_at_1pct_fpr": 0.4615,
+          "precision": 0.2404,
+          "recall": 0.641,
+          "f1": 0.3497,
+          "false_positive_rate": 0.01851
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.6923
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.5686
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9835
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.6406
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2909
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.5
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.9087,
+        "roc_auc": 0.9963,
+        "recall_at_1pct_fpr": 0.9172,
+        "precision": 0.9661,
+        "recall": 0.6183,
+        "f1": 0.7541,
+        "false_positive_rate": 0.00039
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.9291,
+          "roc_auc": 0.9977,
+          "recall_at_1pct_fpr": 0.9432,
+          "precision": 0.978,
+          "recall": 0.6183,
+          "f1": 0.7576,
+          "false_positive_rate": 0.00023
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.8435,
+          "roc_auc": 0.9842,
+          "recall_at_1pct_fpr": 0.8289,
+          "precision": 0.9038,
+          "recall": 0.6184,
+          "f1": 0.7344,
+          "false_positive_rate": 0.00241
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.6789
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.474
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.5312
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.6923
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9895
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.6562
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.3147
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.6667
+        }
+      }
+    },
+    "branch_xgboost": {
+      "model": "Branche seule : xgboost",
+      "threshold": 0.24642826616764069,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4846,
+        "roc_auc": 0.989,
+        "recall_at_1pct_fpr": 0.7723,
+        "precision": 0.4494,
+        "recall": 0.6047,
+        "f1": 0.5156,
+        "false_positive_rate": 0.00493
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.5128,
+          "roc_auc": 0.9924,
+          "recall_at_1pct_fpr": 0.8163,
+          "precision": 0.4821,
+          "recall": 0.5889,
+          "f1": 0.5302,
+          "false_positive_rate": 0.00408
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.394,
+          "roc_auc": 0.9137,
+          "recall_at_1pct_fpr": 0.6923,
+          "precision": 0.3053,
+          "recall": 0.7436,
+          "f1": 0.4328,
+          "false_positive_rate": 0.01547
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.7885
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.3725
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9339
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.1406
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.3636
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.7143
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.8249,
+        "roc_auc": 0.9917,
+        "recall_at_1pct_fpr": 0.8531,
+        "precision": 0.9261,
+        "recall": 0.4694,
+        "f1": 0.623,
+        "false_positive_rate": 0.00067
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.859,
+          "roc_auc": 0.9945,
+          "recall_at_1pct_fpr": 0.9014,
+          "precision": 0.9427,
+          "recall": 0.4582,
+          "f1": 0.6167,
+          "false_positive_rate": 0.00046
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.7416,
+          "roc_auc": 0.9528,
+          "recall_at_1pct_fpr": 0.6711,
+          "precision": 0.8526,
+          "recall": 0.5329,
+          "f1": 0.6559,
+          "false_positive_rate": 0.00337
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.7156
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.341
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.1719
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.7692
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9476
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.1354
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.2589
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.8333
+        }
+      }
+    },
+    "branch_lstm_attention": {
+      "model": "Branche seule : lstm_attention",
+      "threshold": 1.9763429164886475,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4176,
+        "roc_auc": 0.9865,
+        "recall_at_1pct_fpr": 0.7853,
+        "precision": 0.3771,
+        "recall": 0.6911,
+        "f1": 0.488,
+        "false_positive_rate": 0.00759
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.4421,
+          "roc_auc": 0.9892,
+          "recall_at_1pct_fpr": 0.8426,
+          "precision": 0.4046,
+          "recall": 0.7172,
+          "f1": 0.5174,
+          "false_positive_rate": 0.00681
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.206,
+          "roc_auc": 0.9282,
+          "recall_at_1pct_fpr": 0.3077,
+          "precision": 0.1957,
+          "recall": 0.4615,
+          "f1": 0.2748,
+          "false_positive_rate": 0.01734
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.6731
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.5294
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.75
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9421
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.875
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2545
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.2143
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.8512,
+        "roc_auc": 0.991,
+        "recall_at_1pct_fpr": 0.8649,
+        "precision": 0.9,
+        "recall": 0.6213,
+        "f1": 0.7351,
+        "false_positive_rate": 0.00123
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.8648,
+          "roc_auc": 0.9924,
+          "recall_at_1pct_fpr": 0.8828,
+          "precision": 0.9046,
+          "recall": 0.6381,
+          "f1": 0.7483,
+          "false_positive_rate": 0.0011
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.7797,
+          "roc_auc": 0.981,
+          "recall_at_1pct_fpr": 0.6645,
+          "precision": 0.8696,
+          "recall": 0.5263,
+          "f1": 0.6557,
+          "false_positive_rate": 0.00289
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.5963
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.4335
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.5156
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.5962
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9581
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.8698
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.3046
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.4444
+        }
+      }
+    },
+    "branch_autoencoder": {
+      "model": "Branche seule : autoencoder",
+      "threshold": -0.12224463373422623,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.0398,
+        "roc_auc": 0.8714,
+        "recall_at_1pct_fpr": 0.0759,
+        "precision": 0.0564,
+        "recall": 0.2435,
+        "f1": 0.0916,
+        "false_positive_rate": 0.0271
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.0455,
+          "roc_auc": 0.8784,
+          "recall_at_1pct_fpr": 0.1079,
+          "precision": 0.0716,
+          "recall": 0.2157,
+          "f1": 0.1076,
+          "false_positive_rate": 0.01804
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.0377,
+          "roc_auc": 0.8075,
+          "recall_at_1pct_fpr": 0.0513,
+          "precision": 0.0308,
+          "recall": 0.4872,
+          "f1": 0.058,
+          "false_positive_rate": 0.13991
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.0962
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.1373
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.55
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.2
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.3306
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.125
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2545
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.5
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.1314,
+        "roc_auc": 0.882,
+        "recall_at_1pct_fpr": 0.1114,
+        "precision": 0.1595,
+        "recall": 0.2594,
+        "f1": 0.1975,
+        "false_positive_rate": 0.02441
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.1084,
+          "roc_auc": 0.8815,
+          "recall_at_1pct_fpr": 0.1195,
+          "precision": 0.1684,
+          "recall": 0.2019,
+          "f1": 0.1836,
+          "false_positive_rate": 0.01632
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.2765,
+          "roc_auc": 0.8684,
+          "recall_at_1pct_fpr": 0.2039,
+          "precision": 0.1445,
+          "recall": 0.5855,
+          "f1": 0.2318,
+          "false_positive_rate": 0.12687
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.0917
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.1387
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.7344
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.4808
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.3141
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.1458
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.264
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.4722
+        }
+      }
+    },
+    "ablation_without_autoencoder": {
+      "model": "Hybride sans autoencoder",
+      "threshold": 0.21885934465068,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.5002,
+        "roc_auc": 0.9923,
+        "recall_at_1pct_fpr": 0.8403,
+        "precision": 0.4312,
+        "recall": 0.6728,
+        "f1": 0.5256,
+        "false_positive_rate": 0.0059
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.5277,
+          "roc_auc": 0.9947,
+          "recall_at_1pct_fpr": 0.9009,
+          "precision": 0.4585,
+          "recall": 0.6764,
+          "f1": 0.5465,
+          "false_positive_rate": 0.00516
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.3327,
+          "roc_auc": 0.9309,
+          "recall_at_1pct_fpr": 0.4872,
+          "precision": 0.2778,
+          "recall": 0.641,
+          "f1": 0.3876,
+          "false_positive_rate": 0.01523
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.7308
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.4902
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9752
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.5781
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2545
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.5
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.9088,
+        "roc_auc": 0.9963,
+        "recall_at_1pct_fpr": 0.9201,
+        "precision": 0.9732,
+        "recall": 0.572,
+        "f1": 0.7205,
+        "false_positive_rate": 0.00028
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.9269,
+          "roc_auc": 0.9976,
+          "recall_at_1pct_fpr": 0.9397,
+          "precision": 0.9802,
+          "recall": 0.5754,
+          "f1": 0.7251,
+          "false_positive_rate": 0.00019
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.8379,
+          "roc_auc": 0.9827,
+          "recall_at_1pct_fpr": 0.8092,
+          "precision": 0.9333,
+          "recall": 0.5526,
+          "f1": 0.6942,
+          "false_positive_rate": 0.00144
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.6697
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.4162
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.375
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.6923
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9843
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.5938
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.2487
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.6667
+        }
+      }
+    },
+    "ablation_without_lstm_attention": {
+      "model": "Hybride sans lstm_attention",
+      "threshold": 0.2234562939722602,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4674,
+        "roc_auc": 0.99,
+        "recall_at_1pct_fpr": 0.7539,
+        "precision": 0.4512,
+        "recall": 0.5445,
+        "f1": 0.4935,
+        "false_positive_rate": 0.00441
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.5188,
+          "roc_auc": 0.9937,
+          "recall_at_1pct_fpr": 0.8222,
+          "precision": 0.4972,
+          "recall": 0.5248,
+          "f1": 0.5106,
+          "false_positive_rate": 0.00342
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.3737,
+          "roc_auc": 0.918,
+          "recall_at_1pct_fpr": 0.7179,
+          "precision": 0.2828,
+          "recall": 0.7179,
+          "f1": 0.4058,
+          "false_positive_rate": 0.01664
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.6538
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.2941
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9091
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.0938
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2727
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.7143
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.8371,
+        "roc_auc": 0.9933,
+        "recall_at_1pct_fpr": 0.8669,
+        "precision": 0.9501,
+        "recall": 0.432,
+        "f1": 0.5939,
+        "false_positive_rate": 0.00041
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.8827,
+          "roc_auc": 0.996,
+          "recall_at_1pct_fpr": 0.9165,
+          "precision": 0.9724,
+          "recall": 0.4084,
+          "f1": 0.5752,
+          "false_positive_rate": 0.00019
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.7875,
+          "roc_auc": 0.9674,
+          "recall_at_1pct_fpr": 0.7105,
+          "precision": 0.8687,
+          "recall": 0.5658,
+          "f1": 0.6853,
+          "false_positive_rate": 0.00313
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.6055
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.2717
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.2656
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.75
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9372
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.099
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.2081
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.8333
+        }
+      }
+    },
+    "ablation_without_xgboost": {
+      "model": "Hybride sans xgboost",
+      "threshold": 0.20384568924930477,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4031,
+        "roc_auc": 0.9869,
+        "recall_at_1pct_fpr": 0.7906,
+        "precision": 0.375,
+        "recall": 0.699,
+        "f1": 0.4881,
+        "false_positive_rate": 0.00775
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.4417,
+          "roc_auc": 0.9897,
+          "recall_at_1pct_fpr": 0.8455,
+          "precision": 0.4082,
+          "recall": 0.7259,
+          "f1": 0.5226,
+          "false_positive_rate": 0.00679
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.1825,
+          "roc_auc": 0.9256,
+          "recall_at_1pct_fpr": 0.2821,
+          "precision": 0.1765,
+          "recall": 0.4615,
+          "f1": 0.2553,
+          "false_positive_rate": 0.01969
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.6346
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.5882
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.75
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9504
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.8906
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2545
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.2143
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.8566,
+        "roc_auc": 0.9915,
+        "recall_at_1pct_fpr": 0.8679,
+        "precision": 0.9017,
+        "recall": 0.6331,
+        "f1": 0.7439,
+        "false_positive_rate": 0.00123
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.8713,
+          "roc_auc": 0.993,
+          "recall_at_1pct_fpr": 0.8898,
+          "precision": 0.9148,
+          "recall": 0.6473,
+          "f1": 0.7582,
+          "false_positive_rate": 0.00099
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.7861,
+          "roc_auc": 0.9824,
+          "recall_at_1pct_fpr": 0.6645,
+          "precision": 0.8235,
+          "recall": 0.5526,
+          "f1": 0.6614,
+          "false_positive_rate": 0.00433
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.5872
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.4682
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.5469
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.6154
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9634
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.8698
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.3147
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.4722
+        }
+      }
+    },
+    "baseline_rules": {
+      "model": "Règles métier",
+      "threshold": 1.9999999992688762,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.0347,
+        "roc_auc": 0.6908,
+        "recall_at_1pct_fpr": 0.1178,
+        "precision": 0.1264,
+        "recall": 0.0576,
+        "f1": 0.0791,
+        "false_positive_rate": 0.00265
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.0301,
+          "roc_auc": 0.6739,
+          "recall_at_1pct_fpr": 0.102,
+          "precision": 0.1172,
+          "recall": 0.0496,
+          "f1": 0.0697,
+          "false_positive_rate": 0.00241
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.1047,
+          "roc_auc": 0.8396,
+          "recall_at_1pct_fpr": 0.2051,
+          "precision": 0.1724,
+          "recall": 0.1282,
+          "f1": 0.1471,
+          "false_positive_rate": 0.00562
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.0
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.0196
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.2
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.0826
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.0938
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.0
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.0714
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.0828,
+        "roc_auc": 0.697,
+        "recall_at_1pct_fpr": 0.1292,
+        "precision": 0.3391,
+        "recall": 0.0582,
+        "f1": 0.0993,
+        "false_positive_rate": 0.00203
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.0595,
+          "roc_auc": 0.6678,
+          "recall_at_1pct_fpr": 0.0789,
+          "precision": 0.2621,
+          "recall": 0.0441,
+          "f1": 0.0755,
+          "false_positive_rate": 0.00203
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.3078,
+          "roc_auc": 0.8535,
+          "recall_at_1pct_fpr": 0.1842,
+          "precision": 0.7241,
+          "recall": 0.1382,
+          "f1": 0.232,
+          "false_positive_rate": 0.00193
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.0
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.0347
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.2188
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.1154
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.0785
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.0885
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.0
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.0278
+        }
+      }
+    },
+    "baseline_logreg": {
+      "model": "Régression logistique",
+      "threshold": 5.176676729582095,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.3514,
+        "roc_auc": 0.9875,
+        "recall_at_1pct_fpr": 0.6414,
+        "precision": 0.3669,
+        "recall": 0.534,
+        "f1": 0.435,
+        "false_positive_rate": 0.00613
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.4097,
+          "roc_auc": 0.9917,
+          "recall_at_1pct_fpr": 0.7843,
+          "precision": 0.4455,
+          "recall": 0.5364,
+          "f1": 0.4868,
+          "false_positive_rate": 0.00431
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.1123,
+          "roc_auc": 0.9178,
+          "recall_at_1pct_fpr": 0.1795,
+          "precision": 0.1399,
+          "recall": 0.5128,
+          "f1": 0.2198,
+          "false_positive_rate": 0.02883
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.4615
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.3137
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.8099
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.5625
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.1818
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.2857
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.7823,
+        "roc_auc": 0.9914,
+        "recall_at_1pct_fpr": 0.8245,
+        "precision": 0.8867,
+        "recall": 0.4862,
+        "f1": 0.628,
+        "false_positive_rate": 0.00111
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.8277,
+          "roc_auc": 0.9942,
+          "recall_at_1pct_fpr": 0.8573,
+          "precision": 0.9443,
+          "recall": 0.4524,
+          "f1": 0.6118,
+          "false_positive_rate": 0.00044
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.7432,
+          "roc_auc": 0.9778,
+          "recall_at_1pct_fpr": 0.6908,
+          "precision": 0.7203,
+          "recall": 0.6776,
+          "f1": 0.6983,
+          "false_positive_rate": 0.00963
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.4679
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.3006
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.8125
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.7115
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.7958
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.5
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.198
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.3889
+        }
+      }
+    },
+    "baseline_random_forest": {
+      "model": "Random Forest",
+      "threshold": 0.295314573748275,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.4607,
+        "roc_auc": 0.9891,
+        "recall_at_1pct_fpr": 0.8665,
+        "precision": 0.4275,
+        "recall": 0.733,
+        "f1": 0.54,
+        "false_positive_rate": 0.00653
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.4773,
+          "roc_auc": 0.9923,
+          "recall_at_1pct_fpr": 0.9009,
+          "precision": 0.4439,
+          "recall": 0.7376,
+          "f1": 0.5542,
+          "false_positive_rate": 0.00596
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.3685,
+          "roc_auc": 0.9168,
+          "recall_at_1pct_fpr": 0.641,
+          "precision": 0.3176,
+          "recall": 0.6923,
+          "f1": 0.4355,
+          "false_positive_rate": 0.01359
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.7308
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.451
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.9752
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.6094
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.6364
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.6429
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.9309,
+        "roc_auc": 0.9954,
+        "recall_at_1pct_fpr": 0.9467,
+        "precision": 0.974,
+        "recall": 0.6292,
+        "f1": 0.7645,
+        "false_positive_rate": 0.0003
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.9488,
+          "roc_auc": 0.9963,
+          "recall_at_1pct_fpr": 0.9629,
+          "precision": 0.9842,
+          "recall": 0.6508,
+          "f1": 0.7835,
+          "false_positive_rate": 0.00017
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.8173,
+          "roc_auc": 0.9756,
+          "recall_at_1pct_fpr": 0.7697,
+          "precision": 0.9059,
+          "recall": 0.5066,
+          "f1": 0.6498,
+          "false_positive_rate": 0.00193
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.6881
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.4277
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.1875
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.7115
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.9843
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.6094
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.5431
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.7778
+        }
+      }
+    },
+    "baseline_isolation_forest": {
+      "model": "Isolation Forest",
+      "threshold": 0.5365429892392776,
+      "test": {
+        "n": 57796,
+        "n_fraud": 382,
+        "pr_auc": 0.0731,
+        "roc_auc": 0.8643,
+        "recall_at_1pct_fpr": 0.2173,
+        "precision": 0.1341,
+        "recall": 0.2016,
+        "f1": 0.1611,
+        "false_positive_rate": 0.00866
+      },
+      "test_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 343,
+          "pr_auc": 0.079,
+          "roc_auc": 0.8686,
+          "recall_at_1pct_fpr": 0.2332,
+          "precision": 0.1615,
+          "recall": 0.1808,
+          "f1": 0.1706,
+          "false_positive_rate": 0.00606
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 39,
+          "pr_auc": 0.0844,
+          "roc_auc": 0.8605,
+          "recall_at_1pct_fpr": 0.1795,
+          "precision": 0.0789,
+          "recall": 0.3846,
+          "f1": 0.131,
+          "false_positive_rate": 0.04101
+        }
+      },
+      "test_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 52,
+          "recall": 0.0
+        },
+        "AGENT_FRAUD": {
+          "n": 51,
+          "recall": 0.0588
+        },
+        "CNP_FRAUD": {
+          "n": 20,
+          "recall": 0.5
+        },
+        "FRIENDLY_FRAUD": {
+          "n": 5,
+          "recall": 0.0
+        },
+        "SIM_SWAP": {
+          "n": 121,
+          "recall": 0.157
+        },
+        "SMURFING": {
+          "n": 64,
+          "recall": 0.4531
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 55,
+          "recall": 0.2
+        },
+        "TOPUP_DRAIN": {
+          "n": 14,
+          "recall": 0.3571
+        }
+      },
+      "test_truth": {
+        "n": 57796,
+        "n_fraud": 1014,
+        "pr_auc": 0.1949,
+        "roc_auc": 0.8673,
+        "recall_at_1pct_fpr": 0.2446,
+        "precision": 0.3484,
+        "recall": 0.1972,
+        "f1": 0.2519,
+        "false_positive_rate": 0.00659
+      },
+      "test_truth_by_channel": {
+        "MOBILE_MONEY": {
+          "n": 53490,
+          "n_fraud": 862,
+          "pr_auc": 0.185,
+          "roc_auc": 0.8643,
+          "recall_at_1pct_fpr": 0.2413,
+          "precision": 0.375,
+          "recall": 0.1671,
+          "f1": 0.2311,
+          "false_positive_rate": 0.00456
+        },
+        "VISA_VIRTUAL": {
+          "n": 4306,
+          "n_fraud": 152,
+          "pr_auc": 0.267,
+          "roc_auc": 0.882,
+          "recall_at_1pct_fpr": 0.1711,
+          "precision": 0.2947,
+          "recall": 0.3684,
+          "f1": 0.3275,
+          "false_positive_rate": 0.03226
+        }
+      },
+      "test_truth_recall_by_fraud_type": {
+        "ACCOUNT_TAKEOVER": {
+          "n": 109,
+          "recall": 0.0183
+        },
+        "AGENT_FRAUD": {
+          "n": 173,
+          "recall": 0.0347
+        },
+        "CARD_TESTING": {
+          "n": 64,
+          "recall": 0.4219
+        },
+        "CNP_FRAUD": {
+          "n": 52,
+          "recall": 0.2885
+        },
+        "SIM_SWAP": {
+          "n": 191,
+          "recall": 0.1571
+        },
+        "SMURFING": {
+          "n": 192,
+          "recall": 0.3542
+        },
+        "SOCIAL_ENGINEERING": {
+          "n": 197,
+          "recall": 0.1929
+        },
+        "TOPUP_DRAIN": {
+          "n": 36,
+          "recall": 0.3889
+        }
+      }
+    }
+  }
+}

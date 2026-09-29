@@ -31,6 +31,7 @@ class OrangeAdapter(BaseAdapter):
             merchant_country=p.get("pays_marchand"),
             device_id=p["imei"], device_type=p.get("type_terminal", "smartphone"),
             ip_country=p.get("pays_ip"), location_province=p["province"],
+            sim_swap_at=self.parse_optional_time(p.get("date_dernier_changement_sim"), FMT),
         )
 
     def from_unified(self, t: dict) -> dict:
@@ -44,4 +45,5 @@ class OrangeAdapter(BaseAdapter):
             "pays_marchand": t.get("merchant_country"), "imei": t["device_id"],
             "type_terminal": t.get("device_type"), "canal": t["access_channel"],
             "pays_ip": t.get("ip_country"), "province": t["location_province"],
+            "date_dernier_changement_sim": self.format_optional_time(t.get("sim_swap_at"), FMT),
         }

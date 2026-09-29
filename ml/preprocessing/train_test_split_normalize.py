@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from ml.features.feature_engineering import FEATURE_NAMES, PROCESSED_DIR, load_or_build_features
+from ml.features.feature_engineering import FEATURE_NAMES, PROCESSED_DIR, RAW_DIR, load_or_build_features
 
 ARTIFACTS_DIR = Path("ml/artifacts")
 SPLIT_NAMES = ["train", "early_stop", "val", "test"]
@@ -63,18 +63,44 @@ def build_sequence_index(user_ids: pd.Series, seq_len: int = SEQ_LEN) -> np.ndar
     return seq
 
 
-def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False) -> None:
-    features_csv = PROCESSED_DIR / "features.csv"
+def add_ground_truth(table: pd.DataFrame, raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+    """Vérité terrain, pour l'ÉVALUATION seulement (jamais pour l'entraînement) :
+    is_fraud = ce que l'opérateur sait (fraudes signalées) ; is_fraud_true = la réalité
+    (fraudes jamais signalées incluses, contestations abusives exclues), lue dans label_noise.csv."""
+    table = table.copy()
+    table["is_fraud_true"] = table["is_fraud"].astype(int)
+    table["fraud_type_true"] = table["fraud_type"]
+    noise_path = Path(raw_dir) / "label_noise.csv"
+    if noise_path.exists():
+        noise = pd.read_csv(noise_path).set_index("transaction_id")
+        ids = table["transaction_id"]
+        known = ids.isin(noise.index)
+        table.loc[known, "is_fraud_true"] = ids[known].map(noise["true_label"]).astype(int).to_numpy()
+        table.loc[known, "fraud_type_true"] = ids[known].map(noise["true_fraud_type"]).to_numpy()
+    return table
+
+
+def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False,
+                      profile_scope: str = "unified", processed_dir: Path = PROCESSED_DIR,
+                      artifacts_dir: Path = ARTIFACTS_DIR) -> None:
+    """profile_scope="silo" (expérience C2) : profils séparés par canal. À écrire dans un
+    dossier d'expérience (processed_dir ET artifacts_dir), jamais dans ml/artifacts : le
+    service de scoring utilise le profil unifié."""
+    processed_dir, artifacts_dir = Path(processed_dir), Path(artifacts_dir)
+    if profile_scope != "unified" and artifacts_dir.absolute() == ARTIFACTS_DIR.absolute():
+        raise ValueError("profil « silo » : choisir un --artifacts-dir d'expérience, pas ml/artifacts")
+    features_csv = processed_dir / "features.csv"
     if features_csv.exists() and not rebuild_features:
-        table = pd.read_csv(features_csv)
+        table = pd.read_csv(features_csv, low_memory=False)
         print(f"Variables lues depuis {features_csv}")
     else:
-        print("Calcul des variables comportementales (rejeu chronologique)...")
-        table = load_or_build_features(cache_path=features_csv)
+        print(f"Calcul des variables comportementales (rejeu chronologique, profil {profile_scope})...")
+        table = load_or_build_features(cache_path=features_csv, profile_scope=profile_scope)
 
     table["timestamp"] = pd.to_datetime(table["timestamp"])
     if not table["timestamp"].is_monotonic_increasing:
         raise ValueError("features.csv doit être trié chronologiquement")
+    table = add_ground_truth(table)
 
     split, bounds = temporal_split(table["timestamp"])
     train_mask = split <= 1
@@ -83,23 +109,26 @@ def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False) ->
 
     scaler = StandardScaler().fit(X[train_mask])
     X_scaled = np.clip(scaler.transform(X), -CLIP, CLIP).astype(np.float32)
-    seq_idx = build_sequence_index(table["user_id"], seq_len)
+    # en silo, la séquence du LSTM ne contient que les transactions du même canal
+    seq_key = table["user_id"] if profile_scope == "unified" else table["user_id"] + "|" + table["channel"]
+    seq_idx = build_sequence_index(seq_key, seq_len)
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    np.save(PROCESSED_DIR / "X_all.npy", X_scaled)
-    np.save(PROCESSED_DIR / "y_all.npy", y)
-    np.save(PROCESSED_DIR / "seq_idx.npy", seq_idx)
-    np.save(PROCESSED_DIR / "split.npy", split)
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    np.save(processed_dir / "X_all.npy", X_scaled)
+    np.save(processed_dir / "y_all.npy", y)
+    np.save(processed_dir / "seq_idx.npy", seq_idx)
+    np.save(processed_dir / "split.npy", split)
     table[["transaction_id", "timestamp", "user_id", "channel", "tx_type", "amount_usd",
-           "is_fraud", "fraud_type"]].to_csv(PROCESSED_DIR / "meta.csv", index=False)
+           "is_fraud", "fraud_type", "is_fraud_true", "fraud_type_true"]].to_csv(processed_dir / "meta.csv",
+                                                                                index=False)
     # Matrices tabulaires prêtes à l'emploi (baselines, notebooks)
     for name, mask in [("train", train_mask), ("val", split == 2), ("test", split == 3)]:
-        np.save(PROCESSED_DIR / f"X_{name}.npy", X_scaled[mask])
-        np.save(PROCESSED_DIR / f"y_{name}.npy", y[mask].astype(np.float32))
+        np.save(processed_dir / f"X_{name}.npy", X_scaled[mask])
+        np.save(processed_dir / f"y_{name}.npy", y[mask].astype(np.float32))
 
-    joblib.dump(scaler, ARTIFACTS_DIR / "scaler.pkl")
-    (ARTIFACTS_DIR / "feature_names.json").write_text(json.dumps(FEATURE_NAMES, indent=4), encoding="utf-8")
+    joblib.dump(scaler, artifacts_dir / "scaler.pkl")
+    (artifacts_dir / "feature_names.json").write_text(json.dumps(FEATURE_NAMES, indent=4), encoding="utf-8")
 
     stats = {}
     for code, name in enumerate(SPLIT_NAMES):
@@ -110,14 +139,15 @@ def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False) ->
                                           "n_fraud": int(y[m & (table.channel == c).to_numpy()].sum())}
                                       for c in sorted(table.channel.unique())}}
     neg, pos = int((y[train_mask] == 0).sum()), int(y[train_mask].sum())
-    (ARTIFACTS_DIR / "class_weights.json").write_text(json.dumps(
+    (artifacts_dir / "class_weights.json").write_text(json.dumps(
         {"negative": neg, "positive": pos, "scale_pos_weight": round(neg / max(pos, 1), 3)}, indent=4),
         encoding="utf-8")
-    (ARTIFACTS_DIR / "preprocessing.json").write_text(json.dumps(
+    (artifacts_dir / "preprocessing.json").write_text(json.dumps(
         {"split_bounds": bounds, "seq_len": seq_len, "clip": CLIP, "n_features": len(FEATURE_NAMES),
-         "splits": stats}, indent=4, ensure_ascii=False), encoding="utf-8")
+         "profile_scope": profile_scope, "splits": stats}, indent=4, ensure_ascii=False), encoding="utf-8")
 
-    print(f"[OK] {len(table):,} transactions, {len(FEATURE_NAMES)} variables, séquences de {seq_len}")
+    print(f"[OK] {len(table):,} transactions, {len(FEATURE_NAMES)} variables, séquences de {seq_len}, "
+          f"profil {profile_scope} -> {processed_dir}")
     for name, s in stats.items():
         print(f"  {name:<11} n={s['n']:>7,}  fraudes={s['n_fraud']:>5,}  taux={s['fraud_rate']}")
 
@@ -150,5 +180,10 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--seq-len", type=int, default=SEQ_LEN)
     p.add_argument("--rebuild-features", action="store_true")
+    p.add_argument("--profile-scope", choices=["unified", "silo"], default="unified",
+                   help="expérience C2 : 'silo' = profils séparés par canal")
+    p.add_argument("--processed-dir", default=str(PROCESSED_DIR))
+    p.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
     a = p.parse_args()
-    run_preprocessing(seq_len=a.seq_len, rebuild_features=a.rebuild_features)
+    run_preprocessing(seq_len=a.seq_len, rebuild_features=a.rebuild_features, profile_scope=a.profile_scope,
+                      processed_dir=Path(a.processed_dir), artifacts_dir=Path(a.artifacts_dir))

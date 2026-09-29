@@ -1,0 +1,122 @@
+{
+ "trained_at": "2026-09-29T09:56:06",
+ "threshold": 0.7,
+ "categories": [
+  "ENVOI_ERREUR",
+  "FAUX_AGENT",
+  "FAUX_GAIN",
+  "DEMANDE_CODE",
+  "LEGITIME"
+ ],
+ "evaluation": {
+  "n_messages": 8000,
+  "n_templates": 71,
+  "protocole": "validation croisée groupée par modèle de message (5 plis) : formulations jamais vues",
+  "macro_f1": 0.6542,
+  "par_categorie": {
+   "DEMANDE_CODE": {
+    "precision": 0.419,
+    "recall": 0.29,
+    "f1-score": 0.343
+   },
+   "ENVOI_ERREUR": {
+    "precision": 0.553,
+    "recall": 0.834,
+    "f1-score": 0.665
+   },
+   "FAUX_AGENT": {
+    "precision": 0.542,
+    "recall": 0.539,
+    "f1-score": 0.54
+   },
+   "FAUX_GAIN": {
+    "precision": 0.982,
+    "recall": 0.779,
+    "f1-score": 0.869
+   },
+   "LEGITIME": {
+    "precision": 0.855,
+    "recall": 0.854,
+    "f1-score": 0.854
+   }
+  },
+  "matrice_confusion": {
+   "ordre": [
+    "ENVOI_ERREUR",
+    "FAUX_AGENT",
+    "FAUX_GAIN",
+    "DEMANDE_CODE",
+    "LEGITIME"
+   ],
+   "valeurs": [
+    [
+     1063,
+     0,
+     0,
+     90,
+     122
+    ],
+    [
+     0,
+     647,
+     18,
+     314,
+     222
+    ],
+    [
+     123,
+     63,
+     960,
+     0,
+     86
+    ],
+    [
+     391,
+     481,
+     0,
+     361,
+     11
+    ],
+    [
+     346,
+     3,
+     0,
+     97,
+     2602
+    ]
+   ]
+  },
+  "arnaque_vs_legitime": {
+   "roc_auc": 0.9674,
+   "seuil": 0.7,
+   "arnaques_marquees": 0.8691,
+   "legitimes_marques_a_tort": 0.0715
+  },
+  "par_langue": {
+   "fr": {
+    "n": 5760,
+    "arnaques_marquees": 0.893,
+    "legitimes_marques_a_tort": 0.048
+   },
+   "ln": {
+    "n": 1007,
+    "arnaques_marquees": 0.904,
+    "legitimes_marques_a_tort": 0.256
+   },
+   "sw": {
+    "n": 1233,
+    "arnaques_marquees": 0.731,
+    "legitimes_marques_a_tort": 0.006
+   }
+  },
+  "extraction_numeros": {
+   "arnaques_avec_numero_trouve": 1.0
+  },
+  "comparaison_decoupage_aleatoire": {
+   "roc_auc": 1.0,
+   "arnaques_marquees": 1.0,
+   "legitimes_marques_a_tort": 0.0,
+   "note": "optimiste : le test contient des formulations vues à l'apprentissage"
+  }
+ }
+}

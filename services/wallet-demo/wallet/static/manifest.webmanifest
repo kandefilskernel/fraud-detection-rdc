@@ -1,0 +1,14 @@
+{
+  "name": "Portefeuille démo — détection de fraude RDC",
+  "short_name": "Portefeuille démo",
+  "description": "Application client simulée reliée en temps réel à la plateforme de détection de fraude",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f5",
+  "theme_color": "#0f6e56",
+  "icons": [
+    { "src": "static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

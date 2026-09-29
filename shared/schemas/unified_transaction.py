@@ -81,25 +81,39 @@ class UnifiedTransaction(BaseModel):
     device_type: str = Field("smartphone", pattern="^(smartphone|feature_phone)$")
     ip_country: str | None = None
     location_province: str
+    # Signal télécom : date du dernier changement de carte SIM de ce numéro (connue de
+    # l'opérateur via son HLR / registre IMSI). Utilisé par les RÈGLES de décision, pas par
+    # le modèle : il est absent des données d'entraînement synthétiques (sinon résultat circulaire).
+    sim_swap_at: datetime | None = None
+    # Carte Visa, côté émetteur : score de risque calculé par le réseau (ex. Visa Advanced
+    # Authorization, 0-99, élevé = risqué) et authentification 3-D Secure déjà réussie.
+    network_risk_score: int | None = Field(None, ge=0, le=99)
+    three_ds_authenticated: bool | None = None
 
     @field_validator(*ID_FIELDS, mode="before")
     @classmethod
     def _ids_as_text(cls, v):
         return canonical_id(v)
 
-    @field_validator("timestamp")
+    @field_validator("timestamp", "sim_swap_at")
     @classmethod
-    def _to_local_naive(cls, v: datetime) -> datetime:
+    def _to_local_naive(cls, v: datetime | None) -> datetime | None:
         """Ramène tout horodatage à l'heure locale RDC, sans fuseau (comme à l'entraînement)."""
-        if v.tzinfo is not None:
+        if v is not None and v.tzinfo is not None:
             v = v.astimezone(KINSHASA_TZ).replace(tzinfo=None)
         return v
+
+    def hours_since_sim_swap(self) -> float | None:
+        if self.sim_swap_at is None:
+            return None
+        return max((self.timestamp - self.sim_swap_at).total_seconds() / 3600, 0.0)
 
     def to_feature_input(self, status: str) -> dict:
         """Dictionnaire attendu par ml.features.BehavioralFeatureExtractor."""
         ts = self.timestamp
         return {
             "user_id": self.user_id,
+            "operator": self.operator,   # C1 : diversité des opérateurs qui paient un même portefeuille
             "tx_type": self.tx_type.value,
             "channel": self.channel.value,
             "amount_usd": self.amount_usd,
@@ -120,4 +134,8 @@ class UnifiedTransaction(BaseModel):
             "hour": ts.hour,
             "weekday": ts.weekday(),
             "day": ts.day,
+            # hors modèle (ignorés par l'extracteur) : lus par les règles de décision
+            "hours_since_sim_swap": self.hours_since_sim_swap(),
+            "network_risk_score": self.network_risk_score,
+            "three_ds_authenticated": self.three_ds_authenticated,
         }
