@@ -11,6 +11,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 SERVICE = ROOT / "services" / "backoffice-api"
 sys.path[:0] = [str(ROOT), str(SERVICE)]
+from shared.env_file import load_env  # noqa: E402
+
+load_env()   # mot de passe PostgreSQL de .env (base de test dans le même conteneur)
 
 PG = dict(user=os.getenv("POSTGRES_USER", "nuru_admin"),
           password=os.getenv("POSTGRES_PASSWORD", "nuru_secure_password_2026"),

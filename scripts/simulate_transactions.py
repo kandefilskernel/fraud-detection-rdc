@@ -14,10 +14,10 @@ Usage :
     python scripts/simulate_transactions.py --rate 50 --n 2000
     python scripts/simulate_transactions.py --only-fraud-episodes --rate 5   # démo jury
     python scripts/simulate_transactions.py --duplicate-rate 0.05  # 5 % de renvois (idempotence)
-    python scripts/simulate_transactions.py --url https://localhost/ingest --mtls-dir infra/nginx/certs
+    python scripts/simulate_transactions.py --url https://localhost:8443/ingest --mtls-dir infra/nginx/certs
 
 Chaque message est SIGNÉ (HMAC, en-têtes X-Timestamp / X-Signature) comme le ferait le
-système d'un opérateur ; secrets : variable OPERATOR_HMAC_SECRETS (valeurs de dev par défaut).
+système d'un opérateur ; clés et secrets : OPERATOR_API_KEYS / OPERATOR_HMAC_SECRETS, lus dans .env.
 """
 from __future__ import annotations
 
@@ -44,13 +44,16 @@ from app.adapters.visa_virtual_adapter import VisaVirtualAdapter  # noqa: E402
 from app.adapters.vodacom_adapter import VodacomAdapter  # noqa: E402
 from shared.schemas.unified_transaction import canonical_id  # noqa: E402
 from shared.security.request_signing import parse_secrets, signed_headers  # noqa: E402
+from shared.env_file import load_env  # noqa: E402
+
+load_env()   # mêmes clés et secrets que la plateforme (.env)
 
 ADAPTERS = {"vodacom": VodacomAdapter(), "airtel": AirtelAdapter(), "orange": OrangeAdapter(),
             "visa": VisaVirtualAdapter()}
-KEYS = {"vodacom": "dev-vodacom-key", "airtel": "dev-airtel-key", "orange": "dev-orange-key",
-        "visa": "dev-visa-key"}
-HMAC_SECRETS = parse_secrets(os.getenv("OPERATOR_HMAC_SECRETS", "vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,"
-                                                            "orange:dev-orange-hmac,visa:dev-visa-hmac"))
+_DEV_KEYS = "vodacom:dev-vodacom-key,airtel:dev-airtel-key,orange:dev-orange-key,visa:dev-visa-key"
+_DEV_HMAC = "vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,orange:dev-orange-hmac,visa:dev-visa-hmac"
+KEYS = parse_secrets(os.getenv("OPERATOR_API_KEYS", _DEV_KEYS))
+HMAC_SECRETS = parse_secrets(os.getenv("OPERATOR_HMAC_SECRETS", _DEV_HMAC))
 COLORS = {"APPROVE": "\033[32m", "VERIFY": "\033[33m", "BLOCK": "\033[31m"}
 
 
@@ -154,7 +157,9 @@ async def main():
                 fp += action == "BLOCK"
             if not a.quiet and (action != "APPROVE" or r["is_fraud"] == 1):
                 truth = f"FRAUDE {r['fraud_type']}" if r["is_fraud"] == 1 else "légitime"
-                print(f"{COLORS.get(action, '')}{action:7s}\033[0m p={d['fraud_probability']:.3f} "
+                prob = d.get("fraud_probability")
+                p_txt = f"{prob:.3f}" if prob is not None else "  n/a"
+                print(f"{COLORS.get(action, '')}{action:7s}\033[0m p={p_txt} "
                       f"{d['risk_level']:8s} {prov:7s} {r['tx_type']:16s} {r['amount_usd']:>9.2f} USD "
                       f"| réalité : {truth} | {d['end_to_end_ms']:.0f} ms")
 

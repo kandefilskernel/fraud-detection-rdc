@@ -39,6 +39,12 @@ TX_TYPES = ["P2P_SEND", "P2P_RECEIVE", "CASH_IN", "CASH_OUT", "MERCHANT_PAYMENT"
 HIGH_RISK_MERCHANT_CATEGORIES = {"ELECTRONICS", "GIFT_CARDS", "CRYPTO_EXCHANGE", "GAMING"}
 HOME_COUNTRY = "CD"
 
+# Client absent du référentiel KYC (données réelles incomplètes, nouveau client) : profil prudent.
+# Même valeur que le feature store temps réel (ml.serving.feature_store l'importe d'ici).
+DEFAULT_PROFILE = {
+    "province": "Kinshasa", "kyc_level": 1, "kyc_tx_limit_usd": 100.0,
+    "account_age_days": 0.0, "monthly_income_usd": 100.0, "has_visa_virtual": 0,
+}
 HOUR, DAY, WEEK = 3600.0, 86400.0, 7 * 86400.0
 NO_HISTORY_GAP_S = 30 * DAY  # valeur par défaut « jamais vu » pour les délais
 INFLOW_WINDOW_S = 2 * DAY    # réceptions gardées dans le profil du titulaire
@@ -184,7 +190,7 @@ class BehavioralFeatureExtractor:
     def extract(self, tx: dict) -> dict:
         ts, uid = tx["ts"], tx["user_id"]
         st = self.users.get(uid) or _UserState()
-        prof = self.profiles[uid]
+        prof = self.profiles.get(uid) or DEFAULT_PROFILE
         amt = float(tx["amount_usd"])
         log_amt = math.log1p(amt)
         tx_type = tx["tx_type"]

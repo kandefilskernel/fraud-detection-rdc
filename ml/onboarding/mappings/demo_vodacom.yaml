@@ -1,0 +1,99 @@
+# ======================================================================================
+# Correspondance de l'export de DÉMONSTRATION (scripts/demo_export_operateur.py)
+#
+# À gauche : le champ du système (ne pas modifier) ; à droite : le NOM DE LA COLONNE
+# dans l'export de l'opérateur. Seules les colonnes listées ici sont lues : tout le reste
+# (noms, pièces d'identité, adresses...) est ignoré et n'est jamais copié.
+# Documentation complète : docs/DONNEES_REELLES.md
+# ======================================================================================
+
+operator: VODACOM
+channel: MOBILE_MONEY        # MOBILE_MONEY | VISA_VIRTUAL (ou une colonne : voir columns.channel)
+
+format:
+  type: csv                  # csv | excel | parquet
+  sep: ";"                   # séparateur (CSV)
+  encoding: utf-8            # ou latin-1 / cp1252 pour les exports Excel français
+  decimal: ","               # séparateur décimal des montants : "," ou "."
+
+timestamp_format: "%d/%m/%Y %H:%M:%S"   # format des dates (vide = détection ISO 8601)
+timezone:
+  source: UTC                # l export de démonstration est en UTC
+  target: Africa/Kinshasa    # heure locale utilisée par le modèle (même convention en temps réel)
+
+currency:
+  default: CDF               # devise si la colonne est absente ou vide
+  usd_cdf_rate: 2850         # taux CDF pour 1 USD (montants convertis en USD pour le modèle)
+amount_scale: 1              # 0.01 si les montants sont en centimes
+
+columns:
+  # --- obligatoires
+  transaction_id: ID_TRANSACTION
+  timestamp: DATE_HEURE
+  user_id: MSISDN_CLIENT     # numéro du titulaire (pseudonymisé à la lecture)
+  tx_type: TYPE_OPERATION
+  amount: MONTANT
+  # --- fortement recommandés (sinon des familles de variables sont neutralisées)
+  currency: DEVISE
+  status: STATUT
+  counterparty_id: MSISDN_CONTREPARTIE   # autre portefeuille d'un transfert P2P
+  agent_id: CODE_AGENT                   # dépôts et retraits chez un agent
+  merchant_id: CODE_MARCHAND
+  device_id: IMEI                        # ou identifiant d'appareil / d'application
+  access_channel: CANAL                  # APP / USSD / AGENT
+  location_province: PROVINCE            # ou région de la cellule / de l'agent
+  balance_before: SOLDE_AVANT
+  # --- facultatifs
+  # wallet_id: NUMERO_PORTEFEUILLE       # si différent du MSISDN
+  # card_id: NUMERO_CARTE_MASQUE
+  # device_type: TYPE_TERMINAL           # smartphone / feature_phone
+  # ip_country: PAYS_IP
+  # merchant_category: CATEGORIE_MARCHAND
+  # merchant_country: PAYS_MARCHAND
+  # channel: CANAL_PAIEMENT
+  # --- étiquettes, si elles sont DANS l'export (sinon : section fraud_reports)
+  # is_fraud: FRAUDE
+  # fraud_type: TYPE_FRAUDE
+  # fraud_reported_at: DATE_SIGNALEMENT
+
+values:
+  # codes de l'opérateur -> codes du système (la casse est ignorée)
+  tx_type:
+    "Transfert envoyé": P2P_SEND
+    "Transfert reçu": P2P_RECEIVE
+    "Dépôt": CASH_IN
+    "Retrait": CASH_OUT
+    "Paiement marchand": MERCHANT_PAYMENT
+    "Achat crédit": AIRTIME
+    "Paiement facture": BILL_PAYMENT
+  status:
+    "Réussi": SUCCESS
+    "Echoué": FAILED
+  access_channel:
+    "Application": APP
+    "*1222#": USSD
+    "Agent": AGENT
+
+labels:
+  positive_values: ["OUI", "1", "TRUE", "FRAUDE"]   # valeurs de is_fraud qui signifient « fraude »
+  default_report_delay_days: 3   # délai supposé si la date de signalement est inconnue
+
+# Fichier séparé des fraudes signalées / confirmées (plaintes, enquêtes, contestations)
+fraud_reports:
+  format: {type: csv, sep: ";", encoding: utf-8}
+  timestamp_format: "%d/%m/%Y %H:%M:%S"
+  columns:
+    transaction_id: ID_TRANSACTION
+    reported_at: DATE_PLAINTE
+    fraud_type: TYPOLOGIE        # ex. SIM swap, ingénierie sociale, prise de contrôle...
+
+# Référentiel clients (facultatif mais recommandé)
+kyc:
+  format: {type: csv, sep: ";", encoding: utf-8}
+  timestamp_format: "%d/%m/%Y"
+  columns:
+    user_id: MSISDN
+    province: PROVINCE_RESIDENCE
+    kyc_level: NIVEAU_KYC
+    kyc_tx_limit: PLAFOND_TRANSACTION   # même devise que currency.default
+    account_opened_at: DATE_OUVERTURE

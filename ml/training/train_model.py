@@ -64,6 +64,9 @@ class TrainConfig:
     save_artifacts: bool = True
     # Expérience C2 : données prétraitées ailleurs (ex. profils « silo »), avec leur scaler
     processed_dir: str = str(PROCESSED_DIR)
+    # Dossier de sortie des modèles (vide = ml/artifacts, la production). Un espace de travail
+    # (ex. données réelles d'un opérateur, ml.onboarding) y écrit son modèle candidat, jamais en production.
+    artifacts_dir: str = ""
     # Branches du modèle mis en production, choisies selon les besoins (docs/SELECTION_MODELE.md) :
     # forêt aléatoire (meilleure sur la vérité terrain et sur Visa, rendue rapide par FlatForest),
     # LSTM (séquence), autoencodeur (petit gain constant sur les typologies jamais vues)
@@ -104,11 +107,16 @@ def train_pipeline(cfg: TrainConfig) -> dict:
         raise ValueError(f"familles inconnues : {unknown} (disponibles : {list(FEATURE_GROUPS)})")
     processed_dir = Path(cfg.processed_dir)
     experiment = processed_dir.absolute() != PROCESSED_DIR.absolute()
-    if (cfg.exclude_groups or experiment) and cfg.save_artifacts:
+    custom_out = bool(cfg.artifacts_dir)
+    out_dir = Path(cfg.artifacts_dir) if custom_out else ARTIFACTS_DIR
+    if (cfg.exclude_groups or (experiment and not custom_out)) and cfg.save_artifacts:
         log("(expérience : les modèles ne sont PAS sauvegardés, le service de scoring attend le "
             "profil unifié avec toutes les variables)")
         cfg.save_artifacts = False
-    scaler_path = processed_dir / "scaler.pkl" if experiment else ARTIFACTS_DIR / "scaler.pkl"
+    if custom_out:
+        scaler_path = out_dir / "scaler.pkl"
+    else:
+        scaler_path = processed_dir / "scaler.pkl" if experiment else ARTIFACTS_DIR / "scaler.pkl"
     data = load_processed(processed_dir)
     X_full, y, seq_idx, meta = data.X, data.y, data.seq_idx, data.meta
     excluded = {f for g in cfg.exclude_groups for f in FEATURE_GROUPS[g]}
@@ -236,8 +244,8 @@ def train_pipeline(cfg: TrainConfig) -> dict:
     if cfg.save_artifacts:
         if production.tree_kind != "xgboost":
             # la branche XGBoost reste utile hors production : archive de l'assistant d'enquête
-            joblib.dump(xgb_model, ARTIFACTS_DIR / "xgb_branch.pkl")
-        production.save(ARTIFACTS_DIR, metadata={
+            joblib.dump(xgb_model, out_dir / "xgb_branch.pkl")
+        production.save(out_dir, metadata={
             "trained_at": pd.Timestamp.now().isoformat(timespec="seconds"),
             "train_config": asdict(cfg),
             "xgb_best_iteration": int(xgb_model.best_iteration),
@@ -250,7 +258,7 @@ def train_pipeline(cfg: TrainConfig) -> dict:
     if cfg.use_mlflow:
         _log_mlflow(cfg, results, ensemble, reports_dir)
 
-    _print_summary(comparison, results, ensemble, elapsed, reports_dir, cfg.save_artifacts)
+    _print_summary(comparison, results, ensemble, elapsed, reports_dir, cfg.save_artifacts, out_dir)
     return results
 
 
@@ -273,13 +281,13 @@ def _log_mlflow(cfg: TrainConfig, results: dict, ensemble: HybridEnsemble, repor
                 if m in r["test"]:
                     mlflow.log_metric(f"{k}.{m}", r["test"][m])
         if cfg.save_artifacts:
-            mlflow.log_artifacts(str(ARTIFACTS_DIR), artifact_path="artifacts")
+            mlflow.log_artifacts(cfg.artifacts_dir or str(ARTIFACTS_DIR), artifact_path="artifacts")
         mlflow.log_artifacts(str(reports_dir), artifact_path="reports")
     log("\nRun enregistré dans MLflow")
 
 
 def _print_summary(comparison: pd.DataFrame, results: dict, ensemble: HybridEnsemble, elapsed: float,
-                   reports_dir: Path, saved: bool) -> None:
+                   reports_dir: Path, saved: bool, out_dir: Path = ARTIFACTS_DIR) -> None:
     pd.set_option("display.width", 200)
     log("\n" + "=" * 100)
     log("RÉSULTATS SUR LE JEU DE TEST (période la plus récente, jamais vue)")
@@ -299,7 +307,7 @@ def _print_summary(comparison: pd.DataFrame, results: dict, ensemble: HybridEnse
     log(f"\nCoefficients du meta-learner : {meta_coefficients(ensemble.meta)}")
     log(f"Seuil (choisi sur la validation) : {ensemble.threshold:.4f}")
     log(f"Durée totale : {elapsed / 60:.1f} min")
-    log(f"[OK] Modèles -> {ARTIFACTS_DIR}/" if saved else "[OK] Modèles non sauvegardés (ablation)")
+    log(f"[OK] Modèles -> {out_dir}/" if saved else "[OK] Modèles non sauvegardés (ablation)")
     log(f"     Rapports -> {reports_dir}/")
 
 
@@ -315,10 +323,13 @@ def parse_args() -> TrainConfig:
     p.add_argument("--no-save", action="store_true", help="ne pas écraser les modèles de ml/artifacts")
     p.add_argument("--processed-dir", default=str(PROCESSED_DIR),
                    help="données prétraitées d'une expérience (ex. profils silo, C2)")
+    p.add_argument("--artifacts-dir", default="",
+                   help="dossier de sortie du modèle (vide = ml/artifacts). Ex. espace de travail d'un opérateur")
     a = p.parse_args()
     cfg = TrainConfig(seed=a.seed, skip_baselines=a.skip_baselines, use_mlflow=not a.no_mlflow,
                       exclude_groups=tuple(a.exclude_groups), reports_dir=a.reports_dir,
-                      save_artifacts=not a.no_save, processed_dir=a.processed_dir)
+                      save_artifacts=not a.no_save, processed_dir=a.processed_dir,
+                      artifacts_dir=a.artifacts_dir)
     if a.quick:
         cfg.xgb_estimators, cfg.lstm_epochs, cfg.ae_epochs = 150, 2, 5
     return cfg

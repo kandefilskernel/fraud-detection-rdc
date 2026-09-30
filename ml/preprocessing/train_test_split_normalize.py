@@ -82,11 +82,12 @@ def add_ground_truth(table: pd.DataFrame, raw_dir: Path = RAW_DIR) -> pd.DataFra
 
 def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False,
                       profile_scope: str = "unified", processed_dir: Path = PROCESSED_DIR,
-                      artifacts_dir: Path = ARTIFACTS_DIR) -> None:
+                      artifacts_dir: Path = ARTIFACTS_DIR, raw_dir: Path = RAW_DIR) -> None:
     """profile_scope="silo" (expérience C2) : profils séparés par canal. À écrire dans un
     dossier d'expérience (processed_dir ET artifacts_dir), jamais dans ml/artifacts : le
-    service de scoring utilise le profil unifié."""
-    processed_dir, artifacts_dir = Path(processed_dir), Path(artifacts_dir)
+    service de scoring utilise le profil unifié.
+    raw_dir : données brutes (ex. export d'un opérateur importé par ml.onboarding)."""
+    processed_dir, artifacts_dir, raw_dir = Path(processed_dir), Path(artifacts_dir), Path(raw_dir)
     if profile_scope != "unified" and artifacts_dir.absolute() == ARTIFACTS_DIR.absolute():
         raise ValueError("profil « silo » : choisir un --artifacts-dir d'expérience, pas ml/artifacts")
     features_csv = processed_dir / "features.csv"
@@ -95,12 +96,13 @@ def run_preprocessing(seq_len: int = SEQ_LEN, rebuild_features: bool = False,
         print(f"Variables lues depuis {features_csv}")
     else:
         print(f"Calcul des variables comportementales (rejeu chronologique, profil {profile_scope})...")
-        table = load_or_build_features(cache_path=features_csv, profile_scope=profile_scope)
+        table = load_or_build_features(raw_dir / "transactions.csv", raw_dir / "users.csv",
+                                       cache_path=features_csv, profile_scope=profile_scope)
 
     table["timestamp"] = pd.to_datetime(table["timestamp"])
     if not table["timestamp"].is_monotonic_increasing:
         raise ValueError("features.csv doit être trié chronologiquement")
-    table = add_ground_truth(table)
+    table = add_ground_truth(table, raw_dir)
 
     split, bounds = temporal_split(table["timestamp"])
     train_mask = split <= 1
@@ -184,6 +186,8 @@ if __name__ == "__main__":
                    help="expérience C2 : 'silo' = profils séparés par canal")
     p.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     p.add_argument("--artifacts-dir", default=str(ARTIFACTS_DIR))
+    p.add_argument("--raw-dir", default=str(RAW_DIR), help="données brutes (export opérateur importé)")
     a = p.parse_args()
     run_preprocessing(seq_len=a.seq_len, rebuild_features=a.rebuild_features, profile_scope=a.profile_scope,
-                      processed_dir=Path(a.processed_dir), artifacts_dir=Path(a.artifacts_dir))
+                      processed_dir=Path(a.processed_dir), artifacts_dir=Path(a.artifacts_dir),
+                      raw_dir=Path(a.raw_dir))

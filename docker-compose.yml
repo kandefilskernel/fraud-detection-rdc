@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nuru_secure_password_2026}
       POSTGRES_DB: ${POSTGRES_DB:-fraud_detection_db}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,9 +23,12 @@ services:
     image: redis:7.2-alpine
     container_name: nuru_redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]   # persistance des profils comportementaux
+    # persistance des profils comportementaux ; mot de passe obligatoire (REDIS_PASSWORD dans .env)
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?définir REDIS_PASSWORD dans .env}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -48,7 +51,7 @@ services:
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
     ports:
-      - "19092:19092"
+      - "127.0.0.1:19092:19092"
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
@@ -65,7 +68,7 @@ services:
     environment:
       KAFKA_BROKERS: redpanda:9092
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
     depends_on:
       redpanda:
         condition: service_healthy
@@ -80,7 +83,7 @@ services:
     container_name: nuru_seeder
     command: ["python", "-m", "ml.serving.seed_feature_store", "--if-empty"]
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       # doit être identique à l'integration-layer (sinon les clients paraissent inconnus)
       PSEUDONYMIZE_IDS: ${PSEUDONYMIZE_IDS:-false}
       PSEUDONYMIZATION_KEY: ${PSEUDONYMIZATION_KEY:-}
@@ -96,13 +99,13 @@ services:
     container_name: nuru_scoring
     restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SCORING_API_KEYS: ${SCORING_API_KEYS:-dev-scoring-key}
     volumes:
       - ./ml/artifacts:/srv/ml/artifacts:ro   # rechargement à chaud après réentraînement
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     depends_on:
       feature-store-seeder:
         condition: service_completed_successfully
@@ -119,6 +122,11 @@ services:
     environment:
       SCORING_URL: http://scoring-service:8001
       SCORING_API_KEY: ${SCORING_API_KEY:-dev-scoring-key}
+      # délai max du scoring avant la politique de repli (VERIFY) ; 0,8 s en production,
+      # plus long en local si le PC est chargé (voir .env)
+      SCORING_TIMEOUT_S: ${SCORING_TIMEOUT_S:-0.8}
+      # pilote silencieux : décisions notées mais jamais appliquées (ex. vodacom,airtel ou all)
+      SHADOW_MODE_OPERATORS: ${SHADOW_MODE_OPERATORS:-}
       OPERATOR_API_KEYS: ${OPERATOR_API_KEYS:-vodacom:dev-vodacom-key,airtel:dev-airtel-key,orange:dev-orange-key,visa:dev-visa-key}
       # sécurité des messages : secret HMAC par opérateur, distinct de la clé d'API
       OPERATOR_HMAC_SECRETS: ${OPERATOR_HMAC_SECRETS:-vodacom:dev-vodacom-hmac,airtel:dev-airtel-hmac,orange:dev-orange-hmac,visa:dev-visa-hmac}
@@ -133,7 +141,7 @@ services:
       BACKOFFICE_URL: http://backoffice-api:8003
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     depends_on:
       scoring-service:
         condition: service_healthy
@@ -155,7 +163,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ASSISTANT_MODEL: ${ASSISTANT_MODEL:-claude-opus-5}
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,7 +239,7 @@ services:
       - ./ml/data/raw:/srv/ml/data/raw:ro
       - ./ml/artifacts/preprocessing.json:/srv/ml/artifacts/preprocessing.json:ro
     ports:
-      - "8010:8010"
+      - "127.0.0.1:8010:8010"
     depends_on:
       integration-layer:
         condition: service_healthy
@@ -243,8 +251,12 @@ services:
     restart: unless-stopped
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # certificat HTTPS (test : python scripts/security/generate_dev_pki.py)
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
     ports:
-      - "80:80"
+      # 127.0.0.1 par défaut ; BIND_ADDR=0.0.0.0 dans .env pour une démo sur le réseau local
+      - "${BIND_ADDR:-127.0.0.1}:80:80"      # redirige vers HTTPS
+      - "${BIND_ADDR:-127.0.0.1}:443:443"
     depends_on:
       - frontend
       - integration-layer
@@ -256,7 +268,10 @@ services:
       context: .
       dockerfile: services/ml-jobs/Dockerfile
     container_name: nuru_drift_monitor
-    command: ["python", "-m", "ml.monitoring.drift_detector", "--serve", "--interval", "60"]
+    command: ["python", "-m", "ml.monitoring.drift_detector", "--serve", "--interval", "300"]
+    # tâche de fond : basse priorité CPU pour ne pas ralentir le scoring temps réel
+    cpu_shares: 256
+    cpus: "0.5"
     restart: unless-stopped
     env_file: .env
     environment:
@@ -271,6 +286,9 @@ services:
   retrainer:
     image: fraud-rdc/ml-jobs:dev
     container_name: nuru_retrainer
+    # tâche de fond : basse priorité CPU pour ne pas ralentir le scoring temps réel
+    cpu_shares: 256
+    cpus: "1.0"
     command: ["python", "-m", "ml.retraining.scheduler"]
     restart: unless-stopped
     env_file: .env
@@ -291,6 +309,9 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.16.2
     container_name: nuru_mlflow
+    # tâche de fond : basse priorité CPU pour ne pas ralentir le scoring temps réel
+    cpu_shares: 256
+    cpus: "0.5"
     restart: unless-stopped
     command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000",
               "--backend-store-uri", "sqlite:////mlflow/mlflow.db",
@@ -298,7 +319,7 @@ services:
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.62.0
@@ -306,6 +327,7 @@ services:
     restart: unless-stopped
     environment:
       REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
@@ -324,7 +346,7 @@ services:
       - ./infra/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
 
   # Tableaux de bord techniques : http://localhost:3001
   grafana:
@@ -341,7 +363,7 @@ services:
       - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     depends_on:
       - prometheus
 
@@ -371,7 +393,7 @@ services:
     container_name: nuru_mailpit
     restart: unless-stopped
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
 
 volumes:
   postgres_data:

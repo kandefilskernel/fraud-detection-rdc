@@ -109,7 +109,7 @@ Activer le mTLS (certificats de TEST) :
 ```powershell
 python scripts/security/generate_dev_pki.py
 docker compose -f docker-compose.yml -f docker-compose.mtls.yml up -d
-python scripts/simulate_transactions.py --url https://localhost/ingest --mtls-dir infra/nginx/certs
+python scripts/simulate_transactions.py --url https://localhost:8443/ingest --mtls-dir infra/nginx/certs
 ```
 
 En production :

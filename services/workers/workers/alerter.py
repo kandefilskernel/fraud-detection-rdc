@@ -36,6 +36,14 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "1025"))
 FRAUD_TEAM_EMAIL = os.getenv("FRAUD_TEAM_EMAIL", "equipe-fraude@fraud-rdc.local")
 SMS_GATEWAY_URL = os.getenv("SMS_GATEWAY_URL", "")          # vide = SMS simulés (journalisés)
 OPERATOR_WEBHOOKS = json.loads(os.getenv("OPERATOR_WEBHOOKS", "{}"))  # {"VODACOM": "https://..."}
+# Pilote silencieux (même variable que l'integration-layer) : dossier ouvert pour les analystes,
+# mais AUCUN message au client ni à l'opérateur (la décision n'est pas appliquée)
+SHADOW = {p.strip().lower() for p in os.getenv("SHADOW_MODE_OPERATORS", "").split(",") if p.strip()}
+
+
+def is_shadow(t: dict) -> bool:
+    provider = "visa" if t.get("channel") == "VISA_VIRTUAL" else (t.get("operator") or "").lower()
+    return "all" in SHADOW or provider in SHADOW
 producer = Producer({"bootstrap.servers": BOOTSTRAP})
 http = httpx.Client(timeout=3)
 
@@ -98,7 +106,8 @@ def handle(batch: list[dict]) -> None:
             if case_id is None:          # message rejoué : dossier déjà ouvert
                 continue
             notes = []
-            text = sms_text(e)
+            shadow = is_shadow(t)
+            text = None if shadow else sms_text(e)
             if text:
                 status, detail = send_sms(t.get("wallet_id"), text)
                 notes.append(Notification(case_id=case_id, channel="SMS", recipient=t.get("wallet_id") or "?",
@@ -107,7 +116,7 @@ def handle(batch: list[dict]) -> None:
                 status, detail = send_email(case_id, e)
                 notes.append(Notification(case_id=case_id, channel="EMAIL", recipient=FRAUD_TEAM_EMAIL,
                                           status=status, detail=detail))
-            hook = OPERATOR_WEBHOOKS.get(t.get("operator") or "")
+            hook = None if shadow else OPERATOR_WEBHOOKS.get(t.get("operator") or "")
             if hook:
                 try:
                     http.post(hook, json={"transaction_id": t["transaction_id"], "action": d["action"],
@@ -121,7 +130,8 @@ def handle(batch: list[dict]) -> None:
                 "event_id": uuid.uuid4().hex, "ts": datetime.now(timezone.utc).isoformat(), "actor": "system:alerter",
                 "action": "DOSSIER_OUVERT", "entity": "case", "entity_id": str(case_id),
                 "details": {"transaction_id": t["transaction_id"], "risk_level": d["risk_level"],
-                            "action": d["action"], "notifications": [n.channel for n in notes]},
+                            "action": d["action"], "notifications": [n.channel for n in notes],
+                            "pilote_silencieux": shadow},
             }).encode(), b"case")
         db.commit()
     producer.flush(5)

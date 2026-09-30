@@ -29,7 +29,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     # --- retour des opérateurs -> back-office (API interne, jamais exposée par nginx)
     BACKOFFICE_URL: str = "http://localhost:8003"
     INTERNAL_API_KEY: str = "dev-internal-key"
+    # --- pilote silencieux : opérateurs (ex. "vodacom,airtel" ou "all") pour lesquels la décision
+    # est calculée et enregistrée mais JAMAIS appliquée (réponse APPROVE, aucun SMS client)
+    SHADOW_MODE_OPERATORS: str = ""
 
 
 @dataclass
@@ -95,6 +98,7 @@ class Runtime:
     allowed: set[str]
     security: OperatorSecurity
     pseudonymizer: Pseudonymizer | None
+    shadow: set[str] = field(default_factory=set)
 
 
 def configure(s: Settings) -> Runtime:
@@ -121,7 +125,31 @@ def configure(s: Settings) -> Runtime:
         trusted_proxies=parse_networks(s.TRUSTED_PROXIES), require_mtls=s.REQUIRE_MTLS)
     if s.DEPLOYMENT_MODE == "demo":
         log.warning("mode démo : identifiants en clair, tous les opérateurs acceptés (ne pas utiliser en production)")
-    return Runtime(s, adapters, allowed, security, pseudonymizer)
+    shadow = parse_shadow(s.SHADOW_MODE_OPERATORS, set(adapters))
+    if shadow:
+        log.warning("PILOTE SILENCIEUX pour %s : décisions notées, jamais appliquées", sorted(shadow))
+    return Runtime(s, adapters, allowed, security, pseudonymizer, shadow)
+
+
+def parse_shadow(spec: str, providers: set[str]) -> set[str]:
+    """ "vodacom, airtel" -> {"vodacom", "airtel"} ; "all" -> tous ; nom inconnu -> erreur au démarrage."""
+    names = {p.strip().lower() for p in (spec or "").split(",") if p.strip()}
+    if "all" in names:
+        return set(providers)
+    unknown = names - providers
+    if unknown:
+        raise RuntimeError(f"SHADOW_MODE_OPERATORS : opérateurs inconnus {sorted(unknown)} ({sorted(providers)})")
+    return names
+
+
+def apply_shadow(provider: str, result: dict) -> dict:
+    """Pilote silencieux : l'opérateur reçoit toujours APPROVE ; la vraie décision reste dans
+    shadow_action (et dans la base, pour mesurer précision et rappel sur les vraies données)."""
+    if provider in RT.shadow:
+        result["shadow_mode"] = True
+        result["shadow_action"] = result.get("action")
+        result["action"] = "APPROVE"
+    return result
 
 
 settings = Settings()
@@ -192,6 +220,7 @@ async def ingest(provider: str, request: Request):
                   "fraud_probability": None}
     LATENCY.labels(provider).observe(time.perf_counter() - t0)
     result["provider"] = provider
+    apply_shadow(provider, result)
     if provider == "visa":
         result["iso8583_response_code"] = VisaVirtualAdapter.authorization_response(result["action"])
     result["end_to_end_ms"] = round((time.perf_counter() - t0) * 1000, 2)

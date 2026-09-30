@@ -10,6 +10,7 @@ Hypothèses des données synthétiques (sourcées ou supposées) : [docs/HYPOTHE
 Assistant d'enquête des analystes (RAG : cas similaires, procédures, note) : [docs/ASSISTANT_ENQUETE.md](docs/ASSISTANT_ENQUETE.md).
 Choix du modèle de production selon les besoins (8 candidats, fraude inconnue, latence) : [docs/SELECTION_MODELE.md](docs/SELECTION_MODELE.md).
 NLP : analyse des SMS d'arnaque signalés par les clients (marquage des numéros d'escrocs) : [docs/NLP_SIGNALEMENTS_SMS.md](docs/NLP_SIGNALEMENTS_SMS.md).
+**Données réelles des opérateurs** (cahier des charges, import pseudonymisé, contrôle qualité, apprentissage, pilote silencieux) : [docs/DONNEES_REELLES.md](docs/DONNEES_REELLES.md).
 
 > **Statut : prototype de recherche.** Toutes les données sont synthétiques. Avant tout usage réel :
 > pilote en mode silencieux avec un opérateur, audit de sécurité, validation juridique et
@@ -41,6 +42,8 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1          # si refusé : Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pip install -r requirements.txt
 copy .env.example .env               # puis changer les mots de passe
+python scripts\security\generate_secrets.py   # secrets forts (clés, mots de passe) dans .env
+python scripts\security\generate_dev_pki.py   # certificat HTTPS de TEST (obligatoire pour nginx)
 ```
 
 ### 2. Données et modèle (si `ml/data` est vide)
@@ -59,15 +62,17 @@ python scripts\seed_database.py     # comptes de démonstration (analyste, super
 
 | Adresse | Contenu |
 |---|---|
-| http://localhost | Tableau de bord (comptes dans `scripts/seed_database.py`, admin dans `.env`) |
-| http://localhost/portefeuille/ | Application mobile de démonstration « portefeuille client » (PIN de démo : 1234) |
-| http://localhost/ingest/v1/transactions/{vodacom\|airtel\|orange\|visa} | API des opérateurs |
+| https://localhost | Tableau de bord (comptes dans `scripts/seed_database.py`, admin dans `.env`) |
+| https://localhost/portefeuille/ | Application mobile de démonstration « portefeuille client » (PIN de démo : 1234) |
+| https://localhost/ingest/v1/transactions/{vodacom\|airtel\|orange\|visa} | API des opérateurs (signée HMAC ; mTLS sur :8443 avec `docker-compose.mtls.yml`) |
 | http://localhost:8001/docs · :8002/docs · :8003/docs | Documentation des API (scoring, intégration, back-office) |
 | http://localhost:3001 | Grafana (admin / `GRAFANA_ADMIN_PASSWORD`) |
 | http://localhost:9090 | Prometheus (cibles, règles d'alerte) |
 | http://localhost:8088 | Console Kafka (Redpanda) |
 | http://localhost:8025 | Boîte mail locale (e-mails d'alerte) |
 | http://localhost:5000 | MLflow (expériences et registre des modèles) |
+
+`http://localhost` redirige vers HTTPS. Le certificat de test est signé par une autorité de TEST : le navigateur affiche un avertissement tant que cette autorité n'est pas approuvée. Pour l'approuver (votre compte Windows uniquement) : `certutil -user -addstore Root infra\nginx\certs\operators-ca.crt`, puis redémarrer le navigateur. En production : certificat d'une autorité reconnue sur le vrai nom de domaine, et activer HSTS dans `infra/nginx/nginx.conf`.
 
 ### 4. Démonstration temps réel
 ```powershell
@@ -81,7 +86,7 @@ docker run --rm --network fraud-detection-rdc_default -v ${PWD}:/work:ro -w /wor
 ```
 
 ### Démonstration côté client : application « portefeuille »
-Ouvrir http://localhost/portefeuille/ (sur téléphone : même réseau Wi-Fi, adresse IP du PC).
+Ouvrir https://localhost/portefeuille/ (sur téléphone : même réseau Wi-Fi, adresse IP du PC).
 Trois clients fictifs (Vodacom, Airtel, Orange) ; chaque opération passe par la vraie chaîne
 opérateur → integration-layer → scoring, et l'écran « coulisses » montre la décision du modèle.
 

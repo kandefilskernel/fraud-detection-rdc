@@ -59,11 +59,18 @@ def log(msg: str) -> None:
 
 
 # ---------------------------------------------------------------------- données
+def training_data_dir() -> Path:
+    """Données prétraitées du champion : celles d'un espace de travail « données réelles »
+    (metadata.json : training_data, écrit par ml.onboarding) ou, à défaut, ml/data/processed."""
+    meta = json.loads((ARTIFACTS / "metadata.json").read_text(encoding="utf-8"))
+    return Path(meta.get("training_data") or PROCESSED)
+
+
 def load_history() -> pd.DataFrame:
     """Historique vu par le champion : tout ce qui précède sa période de test."""
     prep = json.loads((ARTIFACTS / "preprocessing.json").read_text(encoding="utf-8"))
     b = prep["split_bounds"]
-    h = pd.read_csv(PROCESSED / "features.csv", usecols=["transaction_id", "timestamp", "user_id", "channel",
+    h = pd.read_csv(training_data_dir() / "features.csv", usecols=["transaction_id", "timestamp", "user_id", "channel",
                                                           "is_fraud", *FEATURE_NAMES])
     h["timestamp"] = pd.to_datetime(h["timestamp"])
     h = h[h["timestamp"] < pd.Timestamp(b["test_from"])].copy()
@@ -110,20 +117,30 @@ def train_challenger(table: pd.DataFrame, seed: int = 42, quick: bool = False):
     fit, es = idx["fit"], idx["early_stop"]
     # le challenger reprend l'architecture du champion (branches listées dans metadata.json)
     champion = json.loads((ARTIFACTS / "metadata.json").read_text(encoding="utf-8"))
+    order = champion.get("branch_order", ["xgboost", "lstm_attention", "autoencoder"])
+    detector = champion.get("anomaly_detector")          # veille des anomalies, hors méta-apprenant
     ae = None
-    if "autoencoder" in champion.get("branch_order", ["autoencoder"]):
+    if "autoencoder" in order or detector:
         ae = train_autoencoder_branch(X[fit][y[fit] == 0], X[es][y[es] == 0], epochs=3 if quick else 30,
                                       seed=seed, log=lambda m: None)
-    lstm = train_lstm_branch(X, y, seq, fit, es, epochs=1 if quick else 8, neg_sample_rate=0.3,
-                             seed=seed, log=lambda m: None)
-    tree_kind = champion.get("branch_order", ["xgboost"])[0]
+    lstm = None
+    if "lstm_attention" in order:
+        lstm = train_lstm_branch(X, y, seq, fit, es, epochs=1 if quick else 8, neg_sample_rate=0.3,
+                                 seed=seed, log=lambda m: None)
+    tree_kind = order[0]
     tree = xgb_m
     if tree_kind == "random_forest":
         tree = train_random_forest(X[np.concatenate([fit, es])], y[np.concatenate([fit, es])], seed)
-    ens = HybridEnsemble(tree, lstm, ae, tree_kind=tree_kind)
+    ens = HybridEnsemble(tree, lstm, ae if "autoencoder" in order else None, tree_kind=tree_kind)
     S_val = ens.branch_scores(X, seq, idx["val"])
     ens.meta = build_meta_learner().fit(S_val, y[idx["val"]])
     ens.threshold = best_f1_threshold(y[idx["val"]], ens.meta.predict_proba(S_val)[:, 1])
+    if detector:
+        ens.anomaly = ae
+        a_val = ens.anomaly_scores(X, idx["val"])
+        q = float(detector.get("quantile", 0.995))
+        ens.anomaly_threshold = float(np.quantile(a_val[y[idx["val"]] == 0], q))
+        ens.anomaly_info = {k: v for k, v in detector.items() if k != "threshold"}
     p_eval = ens.predict_proba(X, seq, idx["eval"])
     ref_rows = np.random.default_rng(seed).choice(idx["fit"], size=min(10_000, len(idx["fit"])), replace=False)
     val_sample = np.sort(np.random.default_rng(seed).choice(idx["val"], size=min(10_000, len(idx["val"])),

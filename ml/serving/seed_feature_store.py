@@ -91,6 +91,8 @@ def main():
                    help="'test' (début de la période de test), 'all', ou une date AAAA-MM-JJ")
     p.add_argument("--redis-url", default=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     p.add_argument("--if-empty", action="store_true", help="ne rien faire si Redis est déjà amorcé")
+    p.add_argument("--raw-dir", default=str(RAW_DIR),
+                   help="historique à rejouer (ex. ml/workspaces/<nom>/raw après import d'un opérateur)")
     a = p.parse_args()
 
     r = redis.Redis.from_url(a.redis_url)
@@ -107,7 +109,7 @@ def main():
 
     t0 = time.perf_counter()
     print(f"Rejeu de l'historique{' jusqu au ' + str(until) if until else ''}...")
-    ext, sequences, period_start, n = replay(until)
+    ext, sequences, period_start, n = replay(until, Path(a.raw_dir))
     print(f"    {n:,} transactions rejouées en {time.perf_counter() - t0:.0f} s")
 
     # les profils repartent d'un état passé : les décisions mémorisées pour l'idempotence

@@ -258,3 +258,15 @@ def test_scam_report_requires_signature(api):
     client, _ = api()
     r = client.post("/v1/scam-reports/vodacom", json=SMS, headers={"X-API-Key": KEYS["vodacom"]})
     assert r.status_code == 401
+
+
+def test_shadow_mode_never_applies_the_decision(monkeypatch):
+    """Pilote silencieux : l'opérateur reçoit APPROVE, la vraie décision est conservée."""
+    assert m.parse_shadow("Vodacom, visa", {"vodacom", "airtel", "visa"}) == {"vodacom", "visa"}
+    assert m.parse_shadow("all", {"vodacom", "airtel"}) == {"vodacom", "airtel"}
+    with pytest.raises(RuntimeError):
+        m.parse_shadow("mpesa", {"vodacom"})
+    monkeypatch.setattr(m.RT, "shadow", {"vodacom"})
+    r = m.apply_shadow("vodacom", {"action": "BLOCK"})
+    assert r == {"action": "APPROVE", "shadow_mode": True, "shadow_action": "BLOCK"}
+    assert m.apply_shadow("airtel", {"action": "BLOCK"}) == {"action": "BLOCK"}

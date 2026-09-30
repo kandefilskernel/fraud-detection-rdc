@@ -14,6 +14,9 @@ venv/
 # Données et artefacts lourds (régénérables avec scripts/run_pipeline.ps1)
 ml/data/raw/*.csv
 ml/data/processed/
+# DONNÉES RÉELLES des opérateurs : ne jamais committer (espaces de travail, exports)
+ml/data/workspaces/
+data/exports_operateurs/
 ml/reports/test_predictions.csv
 ml/_backup_*/
 ml/_retrain_log.txt

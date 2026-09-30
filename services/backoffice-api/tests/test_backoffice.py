@@ -62,6 +62,11 @@ def test_reports_are_available(client, admin):
     assert k["volume"] >= 1 and "alert_rate" in k
     assert client.get("/reports/breakdown?dimension=operator", headers=admin).status_code == 200
     assert client.get("/reports/breakdown?dimension=drop table", headers=admin).status_code == 422
+    g = client.get("/reports/geo?minutes=60&operator=VISA", headers=admin)
+    assert g.status_code == 200 and isinstance(g.json()["provinces"], list)
+    assert client.get("/reports/geo?operator=MPESA", headers=admin).status_code == 422
+    d = client.get("/reports/geo/Kinshasa?minutes=60", headers=admin).json()
+    assert set(d) >= {"by_operator", "by_tx_type", "top_rules", "recent_alerts"}
 
 
 def test_audit_log_is_append_only():
@@ -90,3 +95,16 @@ def test_customer_complaint_labels_missed_fraud(client, analyst):
     # une seconde plainte sur un dossier clos est refusée
     assert client.post("/cases/complaint/TX-MISSED", headers=analyst, json={"note": "doublon"}).status_code == 409
     assert client.post("/cases/complaint/INCONNUE", headers=analyst, json={"note": "xxxxx"}).status_code == 404
+
+
+def test_login_lockout_after_repeated_failures(client):
+    """Force brute : 5 échecs -> compte refusé (429), même avec le bon mot de passe."""
+    from app.routers import auth
+    creds = {"username": "admin@test.local", "password": "mauvais-mot-de-passe"}
+    try:
+        for _ in range(5):
+            assert client.post("/auth/login", data=creds).status_code == 401
+        r = client.post("/auth/login", data={"username": "admin@test.local", "password": "AdminTest-2026!"})
+        assert r.status_code == 429 and "Retry-After" in r.headers
+    finally:
+        auth._fails.clear()   # ne pas bloquer les tests suivants

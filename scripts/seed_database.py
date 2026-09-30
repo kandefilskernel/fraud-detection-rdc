@@ -14,6 +14,9 @@ from sqlalchemy import select
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared.database.models import BackofficeUser  # noqa: E402
 from shared.database.session import make_session_factory  # noqa: E402
+from shared.env_file import load_env  # noqa: E402
+
+load_env()   # mot de passe PostgreSQL de .env
 
 DEMO_USERS = [
     ("analyste@fraud-rdc.local", "Analyste Démo", "ANALYSTE", "Analyste-Demo-2026"),

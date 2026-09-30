@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
@@ -13,6 +16,33 @@ from app.security import ROLES, create_access_token, get_current_user, hash_pass
 from shared.database.models import BackofficeUser
 
 router = APIRouter(tags=["authentification & utilisateurs"])
+
+# Anti force brute : après 5 échecs en 15 min, le compte est refusé 15 min (même avec le bon
+# mot de passe, pour ne pas révéler s'il a été trouvé). Mémoire par worker uvicorn : complété
+# par la limite par IP de nginx (/api/auth/login).
+MAX_FAILS, FAIL_WINDOW_S, LOCK_S = 5, 15 * 60, 15 * 60
+_fails: dict[str, list[float]] = {}
+_fails_lock = threading.Lock()
+
+
+def _recent_fails(key: str, now: float) -> list[float]:
+    with _fails_lock:
+        kept = [t for t in _fails.get(key, []) if now - t < max(FAIL_WINDOW_S, LOCK_S)]
+        if kept:
+            _fails[key] = kept
+        else:
+            _fails.pop(key, None)
+        return kept
+
+
+def _lock_remaining(key: str, now: float) -> float:
+    fails = [t for t in _recent_fails(key, now) if now - t < FAIL_WINDOW_S]
+    return (fails[-1] + LOCK_S - now) if len(fails) >= MAX_FAILS else 0.0
+
+
+def _record_fail(key: str, now: float) -> None:
+    with _fails_lock:
+        _fails.setdefault(key, []).append(now)
 
 
 class UserOut(BaseModel):
@@ -42,10 +72,20 @@ class UserUpdate(BaseModel):
 @router.post("/auth/login")
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db),
           pub: Publisher = Depends(get_publisher)):
-    user = db.scalar(select(BackofficeUser).where(BackofficeUser.email == form.username.lower()))
+    key, now = form.username.strip().lower(), time.time()
+    wait = _lock_remaining(key, now)
+    if wait > 0:
+        pub.audit(form.username, "LOGIN_BLOQUE", "bo_user", None, {"reessayer_dans_s": int(wait)})
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            f"trop de tentatives : réessayer dans {int(wait // 60) + 1} min",
+                            headers={"Retry-After": str(int(wait) + 1)})
+    user = db.scalar(select(BackofficeUser).where(BackofficeUser.email == key))
     if user is None or not user.is_active or not verify_password(form.password, user.password_hash):
+        _record_fail(key, now)
         pub.audit(form.username, "LOGIN_ECHEC", "bo_user", None, {})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "identifiants invalides")
+    with _fails_lock:
+        _fails.pop(key, None)
     pub.audit(user.email, "LOGIN", "bo_user", str(user.id), {})
     return {"access_token": create_access_token(user), "token_type": "bearer",
             "user": UserOut.model_validate(user).model_dump()}

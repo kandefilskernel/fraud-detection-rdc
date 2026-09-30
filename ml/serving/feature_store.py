@@ -42,14 +42,11 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from ml.features.feature_engineering import (DAY, P2P_TYPES, REPUTATION_KINDS, WALLET_MAX_EVENTS,
-                                             BehavioralFeatureExtractor, _UserState, _WalletState)
+from ml.features.feature_engineering import (DAY, DEFAULT_PROFILE, P2P_TYPES, REPUTATION_KINDS,
+                                             WALLET_MAX_EVENTS, BehavioralFeatureExtractor, _UserState,
+                                             _WalletState)
 
 PREFIX = "fs"
-DEFAULT_PROFILE = {  # client inconnu du référentiel KYC : profil prudent
-    "province": "Kinshasa", "kyc_level": 1, "kyc_tx_limit_usd": 100.0,
-    "account_age_days": 0.0, "monthly_income_usd": 100.0, "has_visa_virtual": 0,
-}
 
 
 # ---------------------------------------------------------------------- sérialisation
