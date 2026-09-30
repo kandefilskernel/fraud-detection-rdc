@@ -187,6 +187,7 @@ def _score(tx: UnifiedTransaction) -> dict:
             "branch_contributions": res.branch_contributions,
             "attention_on_history": res.attention,
             "attribution": res.attribution,
+            "anomaly": res.anomaly,
         },
         "degraded": res.degraded,
         "degraded_branches": res.degraded_branches,

@@ -3,7 +3,10 @@ Inférence temps réel d'UNE transaction avec le modèle hybride entraîné.
 
     x (variables normalisées, FEATURE_NAMES) ──► arbres (forêt aléatoire ou XGBoost) ─┐
     [9 transactions précédentes + x] ──► LSTM-Attention ────────────────────────┴─► méta-apprenant ─► P(fraude)
-    (autoencodeur en option : branche retirée après la sélection de modèle)
+    (LSTM et autoencodeur facultatifs : branches listées dans metadata.json « branch_order »)
+
+Veille des anomalies (facultative) : autoencodeur HORS méta-apprenant. Son score et son
+drapeau sont renvoyés dans l'explication ; ils ne modifient ni la probabilité ni la décision.
 
 Mode dégradé : si une branche neuronale échoue, sa contribution est remplacée par sa
 valeur moyenne (score standardisé nul pour le méta-apprenant) et la réponse l'indique.
@@ -43,6 +46,7 @@ class ScoreResult:
     degraded: bool
     degraded_branches: list
     attribution: str = "TreeSHAP"
+    anomaly: dict | None = None      # {"score", "threshold", "flag"} si la veille est active
 
 
 class HybridScorer:
@@ -119,15 +123,16 @@ class HybridScorer:
             scores["random_forest"] = math.log(p_rf / (1 - p_rf))
 
         attention = []
-        try:
-            seq, mask, start = self._sequence(history, x)
-            with torch.no_grad():
-                logit, weights = self.model.lstm(seq, mask, return_attention=True)
-            scores["lstm_attention"] = float(logit[0])
-            w = weights[0].numpy()
-            attention = [round(float(v), 4) for v in w[start:]]  # du plus ancien à l'actuelle
-        except Exception:  # noqa: BLE001 — mode dégradé
-            degraded.append("lstm_attention")
+        if self.model.lstm is not None:
+            try:
+                seq, mask, start = self._sequence(history, x)
+                with torch.no_grad():
+                    logit, weights = self.model.lstm(seq, mask, return_attention=True)
+                scores["lstm_attention"] = float(logit[0])
+                w = weights[0].numpy()
+                attention = [round(float(v), 4) for v in w[start:]]  # du plus ancien à l'actuelle
+            except Exception:  # noqa: BLE001 — mode dégradé
+                degraded.append("lstm_attention")
 
         if self.model.ae is not None:
             try:
@@ -136,6 +141,17 @@ class HybridScorer:
                 scores["autoencoder"] = float(np.log(err + 1e-6))
             except Exception:  # noqa: BLE001
                 degraded.append("autoencoder")
+
+        anomaly = None
+        if self.model.anomaly is not None:
+            try:
+                with torch.no_grad():
+                    err = self.model.anomaly.reconstruction_error(torch.from_numpy(X1)).numpy()[0]
+                a = float(np.log(err + 1e-6))
+                anomaly = {"score": round(a, 4), "threshold": round(float(self.model.anomaly_threshold), 4),
+                           "flag": bool(a >= self.model.anomaly_threshold)}
+            except Exception:  # noqa: BLE001 — la veille ne doit jamais bloquer le scoring
+                anomaly = None
 
         b = np.array([scores.get(n, self._branch_mean[i]) for i, n in enumerate(self.branches)])
         z = (b - self._branch_mean) / self._branch_std
@@ -166,4 +182,5 @@ class HybridScorer:
             degraded=bool(degraded),
             degraded_branches=degraded,
             attribution=self.attribution,
+            anomaly=anomaly,
         )

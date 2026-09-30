@@ -12,7 +12,10 @@ class Explanation(BaseModel):
     branch_scores: dict[str, float]
     branch_contributions: dict[str, float]
     attention_on_history: list[float]
-    attribution: str = "TreeSHAP (XGBoost)"   # méthode des contributions par variable
+    attribution: str = "Saabas (forêt aléatoire)"   # méthode des contributions par variable
+    # veille des anomalies (autoencodeur hors méta-apprenant) : {"score", "threshold", "flag"} ;
+    # informative uniquement, sans effet sur l'action
+    anomaly: dict[str, float | bool] | None = None
 
 
 class ScoreResponse(BaseModel):

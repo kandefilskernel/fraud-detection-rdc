@@ -4,7 +4,34 @@
 `ml/training/select_forest.py` (2ᵉ manche), `ml/training/adopt_model.py` (mise en production).
 Rapports : `ml/reports/selection_modele.json`, `ml/reports/selection_foret.json`.
 
-## Résultat
+## Statut méthodologique (mis à jour le 29/09/2026)
+
+Les deux premières manches ci-dessous ont **utilisé le test pour décider** : le choix de la règle
+(XGB + LSTM) a été rejeté sur un bootstrap du test, puis la 2ᵉ manche a été conçue parce que la
+forêt + LSTM était meilleure sur le test. De plus, la règle B1/B6 n'a pas été réappliquée en 2ᵉ
+manche : la forêt seule, devenue éligible grâce à la forêt aplatie, était première sur la
+validation (0,509 contre 0,476 et 0,468). Leurs écarts « test » sont donc **exploratoires** : ils
+ne constituent pas une confirmation indépendante.
+
+**Décision finale : 3ᵉ manche, protocole pré-enregistré** (`ml/training/select_final.py`) :
+
+- la règle est écrite dans le code avant tout calcul et recopiée dans le rapport ;
+- décision sur la validation seule : B3/B4 sur la chaîne complète (prédiction + explication)
+  mesurée dans les mêmes conditions pour tous, B2 (Visa) testé sur la validation, B1 puis B6 ;
+- critère principal : étiquettes observées ; variante déclarée : vérité terrain de la validation
+  (scénario « échantillon vérifié ») ;
+- comparaisons déclarées, sur la validation puis sur le test, avec correction de Holm :
+  forêt + LSTM − forêt seule (apport du profil séquentiel), forêt + LSTM + AE − forêt + LSTM
+  (apport de l'autoencodeur empilé), modèle choisi − modèle en production ;
+- le test est lu une seule fois, après la décision ;
+- l'autoencodeur sort du méta-apprenant (coefficient 0,017, soit un effet quasi nul) et devient une
+  **veille des anomalies** séparée : seuil au quantile 99,5 % des transactions de validation
+  non signalées, sans effet sur la décision, signal pour les analystes.
+
+Résultats : `ml/reports/selection_finale.md` (généré par le script). Mise en production :
+commande `adopt_model` proposée à la fin du rapport, lancée manuellement après relecture.
+
+## Résultat des manches exploratoires (1 et 2)
 
 **Modèle en production : forêt aléatoire + LSTM-attention + autoencodeur**, combinés par un
 méta-apprenant (régression logistique). Il remplace l'hybride XGBoost + LSTM + autoencodeur.
@@ -87,7 +114,9 @@ sur la validation.
 - Le gain est positif sur 7 typologies sur 7 hors égalité, +3,3 points en moyenne. Test du signe :
   p ≈ 0,016. Même constat avec XGBoost : +1,8 point, 7 sur 7.
 - Sur les fraudes connues, l'apport est minime (+0,0005 de PR-AUC, IC [0,0 ; +0,001]).
-- On le garde donc, pour résister aux nouvelles fraudes, pour 0,7 ms de latence.
+- Limite de ce test : le méta-apprenant y est réajusté à 2 entrées (forêt sans T + AE), sans LSTM.
+  Dans le modèle déployé, l'AE ne pèse presque rien (coefficient 0,017) : ce gain ne se transfère
+  pas. D'où la veille séparée de la 3ᵉ manche plutôt que la branche empilée.
 - Limite : le LSTM, lui, a vu toutes les typologies ; ce test porte sur les arbres et l'autoencodeur.
 - Piste : seul, l'autoencodeur détecte mieux les fraudes d'agent, les mules et le test de carte
   jamais vus. Un tableau de « veille des anomalies » séparé, sans friction pour le client,
