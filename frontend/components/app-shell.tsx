@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, ArrowLeftRight, FlaskConical, LogOut, Menu, ShieldAlert, ShieldCheck, Users, X } from "lucide-react";
+import { Activity, ArrowLeftRight, FlaskConical, LogOut, MapPinned, Menu, ShieldAlert, ShieldCheck, Users, X } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme";
 import { getToken, getUser, logout, type User } from "@/lib/api";
@@ -16,6 +16,7 @@ const NAV: { group: string; items: { href: string; label: string; icon: typeof A
     { href: "/", label: "Tableau de bord", icon: Activity, role: "ANALYSTE" },
     { href: "/transactions", label: "Transactions", icon: ArrowLeftRight, role: "ANALYSTE" },
     { href: "/alertes", label: "Alertes & dossiers", icon: ShieldAlert, role: "ANALYSTE", badge: "cases" },
+    { href: "/carte", label: "Carte des fraudes", icon: MapPinned, role: "ANALYSTE" },
   ] },
   { group: "Conformité", items: [{ href: "/audit", label: "Journal d'audit", icon: ShieldCheck, role: "SUPERVISEUR" }] },
   { group: "Administration", items: [{ href: "/utilisateurs", label: "Utilisateurs", icon: Users, role: "ADMIN" }] },

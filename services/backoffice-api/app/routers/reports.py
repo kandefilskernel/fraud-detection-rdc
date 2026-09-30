@@ -95,3 +95,70 @@ def top_risky_users(minutes: int = Query(60 * 24, ge=1), limit: int = Query(10, 
         WHERE action <> 'APPROVE' AND scored_at >= now() - make_interval(mins => :m)
         GROUP BY user_id ORDER BY alerts DESC, max_probability DESC LIMIT :l
     """, m=minutes, l=limit)
+
+
+# ------------------------------------------------------------------ géolocalisation (carte)
+# Filtre « opérateur » de la carte : les 3 opérateurs Mobile Money, ou VISA (cartes virtuelles)
+_GEO_OPERATOR = "^(ALL|VODACOM|AIRTEL|ORANGE|VISA)$"
+_GEO_FILTER = """scored_at >= now() - make_interval(mins => :m)
+          AND (:op = 'ALL' OR (:op = 'VISA' AND channel = 'VISA_VIRTUAL')
+               OR (:op <> 'VISA' AND operator = :op AND channel <> 'VISA_VIRTUAL'))"""
+
+
+@router.get("/geo")
+def geo(minutes: int = Query(60 * 24, ge=1, le=60 * 24 * 30),
+        operator: str = Query("ALL", pattern=_GEO_OPERATOR),
+        db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Indicateurs par province pour la carte de la RDC (province déclarée de la transaction)."""
+    rows = _rows(db, f"""
+        SELECT province,
+               count(*)                                              AS volume,
+               count(*) FILTER (WHERE action <> 'APPROVE')           AS alerts,
+               count(*) FILTER (WHERE action = 'VERIFY')             AS verified,
+               count(*) FILTER (WHERE action = 'BLOCK')              AS blocked,
+               count(DISTINCT user_id) FILTER (WHERE action <> 'APPROVE') AS users_alerted,
+               coalesce(sum(amount_usd), 0)                          AS amount_usd,
+               coalesce(sum(amount_usd) FILTER (WHERE action = 'BLOCK'), 0) AS amount_blocked_usd,
+               coalesce(avg(fraud_probability), 0)                   AS avg_probability,
+               -- opérations hors de la province habituelle du client (signal de géolocalisation)
+               count(*) FILTER (WHERE action <> 'APPROVE'
+                                AND (features->>'is_away_from_home')::float > 0.5) AS alerts_away_from_home,
+               count(*) FILTER (WHERE label = 1)                     AS confirmed_fraud
+        FROM scored_transactions WHERE {_GEO_FILTER}
+        GROUP BY province ORDER BY alerts DESC, volume DESC
+    """, m=minutes, op=operator)
+    for r in rows:
+        r["alert_rate"] = r["alerts"] / r["volume"] if r["volume"] else 0.0
+    return {"window_minutes": minutes, "operator": operator, "provinces": rows}
+
+
+@router.get("/geo/{province}")
+def geo_province(province: str, minutes: int = Query(60 * 24, ge=1, le=60 * 24 * 30),
+                 operator: str = Query("ALL", pattern=_GEO_OPERATOR),
+                 db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Détail d'une province : répartition des alertes et dernières alertes."""
+    p = dict(m=minutes, op=operator, prov=province)
+    where = f"province = :prov AND {_GEO_FILTER}"
+    by_operator = _rows(db, f"""
+        SELECT CASE WHEN channel = 'VISA_VIRTUAL' THEN 'VISA' ELSE coalesce(operator, 'N/A') END AS key,
+               count(*) AS volume, count(*) FILTER (WHERE action <> 'APPROVE') AS alerts
+        FROM scored_transactions WHERE {where} GROUP BY 1 ORDER BY alerts DESC, volume DESC
+    """, **p)
+    by_tx_type = _rows(db, f"""
+        SELECT tx_type AS key, count(*) AS volume, count(*) FILTER (WHERE action <> 'APPROVE') AS alerts
+        FROM scored_transactions WHERE {where} GROUP BY 1 ORDER BY alerts DESC, volume DESC
+    """, **p)
+    rules = _rows(db, f"""
+        SELECT r AS key, count(*) AS n
+        FROM scored_transactions, jsonb_array_elements_text(rules_triggered) AS r
+        WHERE {where} GROUP BY 1 ORDER BY n DESC LIMIT 5
+    """, **p)
+    recent = _rows(db, f"""
+        SELECT transaction_id, tx_time, scored_at, user_id, tx_type, amount_usd, action, risk_level,
+               fraud_probability,
+               CASE WHEN channel = 'VISA_VIRTUAL' THEN 'VISA' ELSE operator END AS operator
+        FROM scored_transactions WHERE {where} AND action <> 'APPROVE'
+        ORDER BY scored_at DESC LIMIT 10
+    """, **p)
+    return {"province": province, "by_operator": by_operator, "by_tx_type": by_tx_type,
+            "top_rules": rules, "recent_alerts": recent}
